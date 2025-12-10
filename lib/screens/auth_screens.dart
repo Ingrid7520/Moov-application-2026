@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../main.dart';
 import '../widgets/common_widgets.dart';
 
@@ -68,38 +69,34 @@ class LoginScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    "Accédez à votre espace producteur",
+                    "Entrez vos informations pour recevoir votre code",
                     style: TextStyle(color: Colors.grey, fontSize: 14),
                   ),
                   const SizedBox(height: 32),
 
+                  // Champ Nom d'utilisateur (Modifié)
+                  const CustomTextField(
+                    label: "Nom d'utilisateur",
+                    icon: Icons.person,
+                  ),
+
+                  // Champ Numéro de téléphone
                   const CustomTextField(
                     label: "Numéro de téléphone",
                     icon: Icons.phone_android,
                     keyboardType: TextInputType.phone,
                     prefixText: "+225 ",
                   ),
-                  const CustomTextField(
-                    label: "Mot de passe",
-                    icon: Icons.lock_outline,
-                    isPassword: true,
-                  ),
-
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {},
-                      child: Text("Mot de passe oublié ?", style: TextStyle(color: Colors.green[700])),
-                    ),
-                  ),
 
                   const SizedBox(height: 24),
 
+                  // Bouton Recevoir Code (Modifié)
                   ElevatedButton(
                     onPressed: () {
-                      Navigator.pushReplacement(
+                      // Redirection vers l'écran de vérification OTP
+                      Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const MainScaffold()),
+                        MaterialPageRoute(builder: (context) => const OtpVerificationScreen()),
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -110,7 +107,7 @@ class LoginScreen extends StatelessWidget {
                       elevation: 2,
                     ),
                     child: const Text(
-                      "Se connecter",
+                      "Recevoir code",
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -136,6 +133,124 @@ class LoginScreen extends StatelessWidget {
                     ],
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- Écran de Vérification OTP (Nouveau) ---
+class OtpVerificationScreen extends StatelessWidget {
+  const OtpVerificationScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              "Vérification",
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Entrez le code à 6 chiffres envoyé",
+              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            ),
+            const SizedBox(height: 40),
+
+            // Champs pour les 6 chiffres (Row avec 6 TextFields)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(6, (index) {
+                return SizedBox(
+                  width: 45,
+                  height: 55,
+                  child: TextField(
+                    onChanged: (value) {
+                      // Passer automatiquement au champ suivant si un chiffre est entré
+                      if (value.length == 1 && index < 5) {
+                        FocusScope.of(context).nextFocus();
+                      }
+                      // Revenir au champ précédent si on efface (optionnel, simple ici)
+                      if (value.isEmpty && index > 0) {
+                        FocusScope.of(context).previousFocus();
+                      }
+                    },
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(1),
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    decoration: InputDecoration(
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.green.shade700, width: 2),
+                      ),
+                      fillColor: Colors.grey[100],
+                      filled: true,
+                    ),
+                  ),
+                );
+              }),
+            ),
+
+            const SizedBox(height: 40),
+
+            ElevatedButton(
+              onPressed: () {
+                // Validation du code et connexion finale
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MainScaffold()),
+                      (route) => false,
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 2,
+              ),
+              child: const Text(
+                "Vérifier et se connecter",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  // Logique pour renvoyer le code
+                },
+                child: Text(
+                  "Renvoyer le code",
+                  style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
@@ -177,11 +292,13 @@ class RegisterScreen extends StatelessWidget {
             ),
             const SizedBox(height: 32),
 
+            // Nom complet
             const CustomTextField(
               label: "Nom complet",
               icon: Icons.person_outline,
             ),
 
+            // Numéro de téléphone
             const CustomTextField(
               label: "Numéro de téléphone",
               icon: Icons.phone_android,
@@ -189,26 +306,7 @@ class RegisterScreen extends StatelessWidget {
               prefixText: "+225 ",
             ),
 
-            const CustomTextField(
-              label: "Email",
-              icon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-              isOptional: true,
-            ),
-
-            // Mot de passe
-            const CustomTextField(
-              label: "Mot de passe",
-              icon: Icons.lock_outline,
-              isPassword: true,
-            ),
-
-            // Confirmation (Correction de l'icône ici)
-            const CustomTextField(
-              label: "Confirmer le mot de passe",
-              icon: Icons.verified_user, // Icône valide pour la confirmation
-              isPassword: true,
-            ),
+            // Note : Email et Mots de passe supprimés selon la demande
 
             const SizedBox(height: 16),
 
@@ -237,6 +335,7 @@ class RegisterScreen extends StatelessWidget {
 
             ElevatedButton(
               onPressed: () {
+                // Inscription réussie -> Accès direct à l'accueil
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const MainScaffold()),
