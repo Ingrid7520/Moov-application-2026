@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'screens/home_screen.dart';
 import 'screens/diagnostic_screen.dart';
 import 'screens/market_screen.dart';
@@ -22,7 +23,8 @@ class AgriSmartApp extends StatelessWidget {
         primarySwatch: Colors.green,
         scaffoldBackgroundColor: Colors.grey[50],
         useMaterial3: true,
-        fontFamily: 'Roboto',
+        textTheme: GoogleFonts.montserratTextTheme()
+        //fontFamily: 'Roboto',
       ),
       // L'application démarre maintenant sur l'écran de connexion
       home: const LoginScreen(),
