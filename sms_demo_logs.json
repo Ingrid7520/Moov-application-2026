@@ -19,5 +19,68 @@
     "message": "Votre code de vérification AgriSmart CI est: 895208. Valide pour 5 minutes.",
     "status": "simulated",
     "mode": "simulation"
+  },
+  {
+    "timestamp": "2025-12-12T22:39:07.898079",
+    "phone": "+2250172957171",
+    "message": "Votre code de vérification AgriSmart CI est: 021442. Valide pour 5 minutes.",
+    "status": "simulated",
+    "mode": "simulation"
+  },
+  {
+    "timestamp": "2025-12-12T22:47:35.485532",
+    "phone": "+2250172957171",
+    "message": "Votre code de vérification AgriSmart CI est: 277596. Valide pour 5 minutes.",
+    "status": "simulated",
+    "mode": "simulation"
+  },
+  {
+    "timestamp": "2025-12-13T00:20:15.198622",
+    "phone": "+2250173957171",
+    "message": "Votre code de vérification AgriSmart CI est: 265211. Valide pour 5 minutes.",
+    "status": "simulated",
+    "mode": "simulation"
+  },
+  {
+    "timestamp": "2025-12-13T00:21:36.093561",
+    "phone": "+2250173957171",
+    "message": "Votre code de vérification AgriSmart CI est: 340600. Valide pour 5 minutes.",
+    "status": "simulated",
+    "mode": "simulation"
+  },
+  {
+    "timestamp": "2025-12-13T00:46:22.134607",
+    "phone": "+2250173957171",
+    "message": "Votre code de vérification AgriSmart CI est: 238507. Valide pour 5 minutes.",
+    "status": "simulated",
+    "mode": "simulation"
+  },
+  {
+    "timestamp": "2025-12-13T00:52:45.882127",
+    "phone": "+2250173957171",
+    "message": "Votre code de vérification AgriSmart CI est: 969588. Valide pour 5 minutes.",
+    "status": "simulated",
+    "mode": "simulation"
+  },
+  {
+    "timestamp": "2025-12-13T00:59:30.417199",
+    "phone": "+2250102030406",
+    "message": "Votre code de vérification AgriSmart CI est: 770946. Valide pour 5 minutes.",
+    "status": "simulated",
+    "mode": "simulation"
+  },
+  {
+    "timestamp": "2025-12-13T13:53:35.669964",
+    "phone": "+2250172957171",
+    "message": "Votre code de vérification AgriSmart CI est: 985513. Valide pour 5 minutes.",
+    "status": "simulated",
+    "mode": "simulation"
+  },
+  {
+    "timestamp": "2025-12-14T20:40:46.802414",
+    "phone": "+2250172957171",
+    "message": "Votre code de vérification AgriSmart CI est: 642320. Valide pour 5 minutes.",
+    "status": "simulated",
+    "mode": "simulation"
   }
 ]
