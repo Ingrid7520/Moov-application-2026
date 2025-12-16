@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-import 'weather_detail_screen.dart'; // ← Import de la nouvelle page détaillée
+import 'weather_detail_screen.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/quick_action_card.dart';
 
@@ -20,7 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool isLoading = true;
   String errorMessage = '';
 
-  // Ville par défaut – tu pourras la rendre dynamique plus tard
+  // Ville par défaut
   final String cityName = "Aboisso";
 
   @override
@@ -35,18 +35,19 @@ class _HomeScreenState extends State<HomeScreen> {
       errorMessage = '';
     });
 
-    print('🚀 Tentative de requête vers http://192.168.137.239:8000/api/weather/city/');
-    print('Body envoyé : ${json.encode({'city': cityName})}');
+    // Utilisation de 10.0.2.2 pour l'émulateur Android vers le serveur local
+    const String baseUrl = 'http://10.0.2.2:8000';
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.137.239:8000/api/weather/city/'),
+        Uri.parse('$baseUrl/api/weather/city/'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'city': cityName}),
-      ).timeout(const Duration(seconds: 20));
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> jsonData = json.decode(response.body);
+        // utf8.decode est crucial pour les accents provenant de l'API
+        final Map<String, dynamic> jsonData = json.decode(utf8.decode(response.bodyBytes));
 
         setState(() {
           weatherData = jsonData;
@@ -58,23 +59,17 @@ class _HomeScreenState extends State<HomeScreen> {
         throw Exception('Erreur serveur (${response.statusCode})');
       }
     } catch (e) {
-      print('❌ Erreur détaillée : $e');
-      print('Type de l\'erreur : ${e.runtimeType}');
-      if (e is http.ClientException) {
-        print('ClientException message: ${e.message}');
-      }
-
       setState(() {
         isLoading = false;
-        errorMessage = 'Impossible de charger la météo :\n$e';
+        errorMessage = 'Erreur de connexion au serveur';
       });
+      print('❌ Erreur Météo : $e');
     }
   }
 
   // Icône selon le code OpenWeatherMap
   IconData getWeatherIcon(String? iconCode) {
     if (iconCode == null) return Icons.cloud;
-
     if (iconCode.startsWith('01')) return Icons.wb_sunny;
     if (iconCode.startsWith('02')) return Icons.wb_cloudy;
     if (iconCode.startsWith('03') || iconCode.startsWith('04')) return Icons.cloud;
@@ -82,7 +77,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (iconCode.startsWith('11')) return Icons.flash_on;
     if (iconCode.startsWith('13')) return Icons.ac_unit;
     if (iconCode.startsWith('50')) return Icons.compare_arrows;
-
     return Icons.cloud;
   }
 
@@ -146,7 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // === Zone Météo CLIQUABLE ===
+                  // === Zone Météo CLIQUABLE (Responsive corrigée) ===
                   InkWell(
                     onTap: () {
                       if (weatherData != null && !isLoading && errorMessage.isEmpty) {
@@ -168,77 +162,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: isLoading
                           ? const Center(
-                              child: CircularProgressIndicator(color: Colors.white),
-                            )
+                        child: CircularProgressIndicator(color: Colors.white),
+                      )
                           : errorMessage.isNotEmpty
-                              ? Column(
-                                  children: [
-                                    const Icon(Icons.error_outline, color: Colors.white, size: 40),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      errorMessage,
-                                      style: const TextStyle(color: Colors.white70),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    TextButton(
-                                      onPressed: fetchWeatherByCity,
-                                      child: const Text(
-                                        "Réessayer",
-                                        style: TextStyle(color: Colors.white),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          getWeatherIcon(current?['icon']),
-                                          color: Colors.white,
-                                          size: 50,
-                                        ),
-                                        const SizedBox(width: 16),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              "${current?['temperature'] ?? '--'}°C",
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 36,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            Text(
-                                              "$locationName, ${current?['description'] ?? 'Inconnu'}",
-                                              style: TextStyle(color: Colors.green[100]),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        const Text(
-                                          "Humidité",
-                                          style: TextStyle(color: Colors.white),
-                                        ),
-                                        Text(
-                                          "${current?['humidity'] ?? '--'}%",
-                                          style: TextStyle(
-                                            color: Colors.green[100],
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
+                          ? _buildWeatherError()
+                          : _buildWeatherContent(current, locationName),
                     ),
                   ),
                 ],
@@ -324,11 +252,85 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
           ],
         ),
       ),
+    );
+  }
+
+  // Widget interne pour le contenu météo (optimisé pour Expanded)
+  Widget _buildWeatherContent(dynamic current, String locationName) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Icon(
+                getWeatherIcon(current?['icon']),
+                color: Colors.white,
+                size: 45,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        "${current?['temperature'] ?? '--'}°C",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      "$locationName, ${current?['description'] ?? 'Inconnu'}",
+                      style: TextStyle(color: Colors.green[100], fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Text("Humidité", style: TextStyle(color: Colors.white, fontSize: 12)),
+            Text(
+              "${current?['humidity'] ?? '--'}%",
+              style: TextStyle(
+                color: Colors.green[100],
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // Widget interne pour les erreurs météo
+  Widget _buildWeatherError() {
+    return Column(
+      children: [
+        const Icon(Icons.cloud_off, color: Colors.white, size: 30),
+        const SizedBox(height: 4),
+        const Text("Météo indisponible", style: TextStyle(color: Colors.white)),
+        TextButton(
+          onPressed: fetchWeatherByCity,
+          child: const Text("Réessayer", style: TextStyle(color: Colors.white, decoration: TextDecoration.underline)),
+        ),
+      ],
     );
   }
 }

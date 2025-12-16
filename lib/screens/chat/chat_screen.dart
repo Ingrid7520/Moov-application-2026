@@ -11,6 +11,8 @@ import 'package:record/record.dart';
 import 'package:lottie/lottie.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 import '../../constants/api_constants.dart';
 
@@ -60,7 +62,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     // Message de bienvenue
     _messages.add({
       'text':
-          '👋 Salut ! Je suis ton assistant AgriSmart.\nTu peux m\'envoyer du texte, des photos${_audioSupported ? ' ou des notes vocales 🎤' : ''} !',
+      '👋 Salut ! Je suis ton assistant AgriSmart.\nTu peux m\'envoyer du texte, des photos${_audioSupported ? ' ou des notes vocales 🎤' : ''} !',
       'isBot': true,
     });
 
@@ -86,7 +88,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
     });
 
-    _controller.addListener(() => setState(() {}));
+    _controller.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -108,19 +112,36 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     if (text.isEmpty && imageToSend == null && audioToSend == null) return;
 
-    setState(() {
-      _messages.add({
-        'text': text,
-        'isBot': false,
-        'image': imageToSend?.path,
-        'audio': audioToSend,
+    // Copier le fichier audio dans un emplacement permanent
+    String? permanentAudioPath;
+    if (audioToSend != null) {
+      try {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        final permanentFile = File(path.join(appDir.path, fileName));
+        await File(audioToSend).copy(permanentFile.path);
+        permanentAudioPath = permanentFile.path;
+      } catch (e) {
+        debugPrint('Erreur copie audio: $e');
+        permanentAudioPath = audioToSend; // Fallback
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _messages.add({
+          'text': text,
+          'isBot': false,
+          'image': imageToSend?.path,
+          'audio': permanentAudioPath,
+        });
+        _controller.clear();
+        _isTyping = true;
+        _selectedImage = null;
+        _recordedAudioPath = null;
       });
-      _controller.clear();
-      _isTyping = true;
-      _selectedImage = null;
-      _recordedAudioPath = null;
-    });
-    _scrollToBottom();
+      _scrollToBottom();
+    }
 
     try {
       var uri = Uri.parse('${ApiConstants.baseUrl}${ApiConstants.chatStreamEndpoint}');
@@ -178,12 +199,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             if (json['text'] != null) {
               hasReceivedContent = true;
               accumulatedText += json['text'];
-              if (_messages.last['isBot'] == true) {
-                setState(() => _messages.last['text'] = accumulatedText);
-              } else {
-                setState(() => _messages.add({'text': accumulatedText, 'isBot': true}));
+              if (mounted) {
+                if (_messages.last['isBot'] == true) {
+                  setState(() => _messages.last['text'] = accumulatedText);
+                } else {
+                  setState(() => _messages.add({'text': accumulatedText, 'isBot': true}));
+                }
+                _scrollToBottom();
               }
-              _scrollToBottom();
             }
           } catch (_) {}
         }
@@ -193,7 +216,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _addBotMessage('❌ Aucune réponse reçue. Le serveur IA est peut-être surchargé.');
       }
     } on TimeoutException {
-      _addBotMessage('⏳ Temps d’attente dépassé.\nRéessaie dans quelques minutes.');
+      _addBotMessage('⏳ Temps d\'attente dépassé.\nRéessaie dans quelques minutes.');
     } catch (e) {
       String errorMsg = '❌ Erreur de connexion';
       final errorStr = e.toString().toLowerCase();
@@ -202,16 +225,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
       _addBotMessage(errorMsg);
     } finally {
-      setState(() => _isTyping = false);
+      if (mounted) {
+        setState(() => _isTyping = false);
+      }
     }
   }
 
   void _addBotMessage(String text) {
-    setState(() {
-      _messages.add({'text': text, 'isBot': true});
-      _isTyping = false;
-    });
-    _scrollToBottom();
+    if (mounted) {
+      setState(() {
+        _messages.add({'text': text, 'isBot': true});
+        _isTyping = false;
+      });
+      _scrollToBottom();
+    }
   }
 
   void _newConversation() {
@@ -227,7 +254,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (_scrollController.hasClients && mounted) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -242,42 +269,78 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     final status = await Permission.microphone.request();
     if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Permission microphone requise')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Permission microphone requise')),
+        );
+      }
       return;
     }
 
-    final directory = Directory.systemTemp;
-    final path = '${directory.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    try {
+      final directory = Directory.systemTemp;
+      final path = '${directory.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-    await _audioRecorder.start(
-      const RecordConfig(encoder: AudioEncoder.aacLc, numChannels: 1, sampleRate: 44100),
-      path: path,
-    );
-    setState(() => _isRecording = true);
+      await _audioRecorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc, numChannels: 1, sampleRate: 44100),
+        path: path,
+      );
+
+      if (mounted) {
+        setState(() => _isRecording = true);
+      }
+    } catch (e) {
+      debugPrint('Erreur démarrage enregistrement: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erreur lors de l\'enregistrement')),
+        );
+      }
+    }
   }
 
   Future<void> _stopRecording() async {
     if (!_isRecording) return;
 
-    final path = await _audioRecorder.stop();
-    if (path != null) {
-      setState(() {
-        _isRecording = false;
-        _recordedAudioPath = path;
-      });
+    try {
+      final path = await _audioRecorder.stop();
+      if (path != null && mounted) {
+        setState(() {
+          _isRecording = false;
+          _recordedAudioPath = path;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erreur arrêt enregistrement: $e');
+      if (mounted) {
+        setState(() => _isRecording = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erreur lors de l\'arrêt')),
+        );
+      }
     }
   }
 
   Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) setState(() => _selectedImage = image);
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      if (image != null && mounted) {
+        setState(() => _selectedImage = image);
+      }
+    } catch (e) {
+      debugPrint('Erreur sélection image: $e');
+    }
   }
 
   Future<void> _takePhoto() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.camera);
-    if (image != null) setState(() => _selectedImage = image);
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.camera);
+      if (image != null && mounted) {
+        setState(() => _selectedImage = image);
+      }
+    } catch (e) {
+      debugPrint('Erreur prise photo: $e');
+    }
   }
 
   @override
@@ -449,6 +512,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                               contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                             ),
                             onSubmitted: (_) => _sendMessage(),
+                            onTapOutside: (event) {
+                              // Empêcher l'erreur de widget désactivé
+                            },
                           ),
                         ),
                       ),
@@ -619,6 +685,9 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
+  StreamSubscription<Duration?>? _durationSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<bool>? _playingSubscription;
 
   AnimationController? _avatarController;
 
@@ -642,13 +711,16 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
   Future<void> _initAudio() async {
     try {
       await _audioPlayer.setFilePath(widget.audioPath!);
-      _audioPlayer.durationStream.listen((d) {
+
+      _durationSubscription = _audioPlayer.durationStream.listen((d) {
         if (mounted) setState(() => _duration = d ?? Duration.zero);
       });
-      _audioPlayer.positionStream.listen((p) {
+
+      _positionSubscription = _audioPlayer.positionStream.listen((p) {
         if (mounted) setState(() => _position = p);
       });
-      _audioPlayer.playingStream.listen((p) {
+
+      _playingSubscription = _audioPlayer.playingStream.listen((p) {
         if (mounted) setState(() => _isPlaying = p);
       });
     } catch (e) {
@@ -657,10 +729,14 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
   }
 
   Future<void> _togglePlayback() async {
-    if (_isPlaying) {
-      await _audioPlayer.pause();
-    } else {
-      await _audioPlayer.play();
+    try {
+      if (_isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        await _audioPlayer.play();
+      }
+    } catch (e) {
+      debugPrint("Erreur lecture audio : $e");
     }
   }
 
@@ -672,6 +748,9 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
 
   @override
   void dispose() {
+    _durationSubscription?.cancel();
+    _positionSubscription?.cancel();
+    _playingSubscription?.cancel();
     _audioPlayer.dispose();
     _avatarController?.dispose();
     super.dispose();
@@ -750,24 +829,25 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
                   ),
                   const SizedBox(height: 8),
                 ],
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                  decoration: BoxDecoration(
-                    color: widget.isBot ? Colors.white : const Color(0xFF0A7B5A),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8)],
+                if (widget.text.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                    decoration: BoxDecoration(
+                      color: widget.isBot ? Colors.white : const Color(0xFF0A7B5A),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8)],
+                    ),
+                    child: widget.isBot
+                        ? MarkdownBody(
+                      data: widget.text,
+                      styleSheet: MarkdownStyleSheet(
+                        p: const TextStyle(color: Colors.black87, height: 1.5, fontSize: 15.5),
+                        strong: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    )
+                        : Text(widget.text, style: const TextStyle(color: Colors.white, fontSize: 15.5)),
                   ),
-                  child: widget.isBot
-                      ? MarkdownBody(
-                          data: widget.text,
-                          styleSheet: MarkdownStyleSheet(
-                            p: const TextStyle(color: Colors.black87, height: 1.5, fontSize: 15.5),
-                            strong: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        )
-                      : Text(widget.text, style: const TextStyle(color: Colors.white, fontSize: 15.5)),
-                ),
               ],
             ),
           ),

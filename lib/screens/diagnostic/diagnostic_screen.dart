@@ -25,7 +25,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
   String? errorMessage;
 
   final ImagePicker _picker = ImagePicker();
-  final String apiUrl = 'http://192.168.137.239:8000/api/chat/';
+  final String apiUrl = 'http://10.0.2.2:8000/api/chat/';
 
   @override
   Widget build(BuildContext context) {
