@@ -35,12 +35,15 @@ class _HomeScreenState extends State<HomeScreen> {
       errorMessage = '';
     });
 
+    print('🚀 Tentative de requête vers http://192.168.137.239:8000/api/weather/city/');
+    print('Body envoyé : ${json.encode({'city': cityName})}');
+
     try {
       final response = await http.post(
         Uri.parse('http://192.168.137.239:8000/api/weather/city/'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'city': cityName}),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonData = json.decode(response.body);
@@ -55,6 +58,12 @@ class _HomeScreenState extends State<HomeScreen> {
         throw Exception('Erreur serveur (${response.statusCode})');
       }
     } catch (e) {
+      print('❌ Erreur détaillée : $e');
+      print('Type de l\'erreur : ${e.runtimeType}');
+      if (e is http.ClientException) {
+        print('ClientException message: ${e.message}');
+      }
+
       setState(() {
         isLoading = false;
         errorMessage = 'Impossible de charger la météo :\n$e';

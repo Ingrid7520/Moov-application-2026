@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat avec Gemini</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .chat-container {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 20px 20px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .session-info {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message.user {
+            flex-direction: row-reverse;
+        }
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .message.assistant .message-content {
+            background: white;
+            color: #333;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            line-height: 1.6;
+        }
+        .message.assistant .message-content h2 { font-size: 18px; margin: 16px 0 8px 0; color: #667eea; }
+        .message.assistant .message-content h3 { font-size: 16px; margin: 12px 0 6px 0; color: #764ba2; }
+        .message.assistant .message-content ul { margin: 8px 0; padding-left: 20px; }
+        .message.assistant .message-content li { margin: 4px 0; }
+        .message.assistant .message-content strong { color: #667eea; font-weight: 600; }
+        .message.assistant .message-content code {
+            background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px;
+        }
+        .message.assistant .message-content a { color: #667eea; text-decoration: none; }
+        .message.assistant .message-content a:hover { text-decoration: underline; }
+        .message.assistant .message-content p { margin: 8px 0; }
+
+        .message-image, .message-audio {
+            max-width: 300px;
+            border-radius: 12px;
+            margin-top: 8px;
+        }
+        .message-audio audio {
+            width: 100%;
+        }
+
+        .chat-input-area {
+            padding: 20px;
+            background: white;
+            border-radius: 0 0 20px 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        #messageInput {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border 0.3s;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+        }
+        #messageInput:focus { border-color: #667eea; }
+
+        button {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: scale(1.05); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .typing-indicator { display: none; padding: 10px; background: white; border-radius: 18px; width: 60px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .typing-indicator.active { display: block; }
+        .typing-indicator span {
+            height: 8px; width: 8px; background: #667eea; border-radius: 50%; display: inline-block; margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+        .mode-selector { margin-bottom: 10px; display: flex; gap: 10px; }
+        .mode-btn { padding: 8px 16px; border-radius: 20px; font-size: 12px; }
+        .mode-btn.active { background: #667eea; color: white; }
+
+        .media-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .media-btn {
+            padding: 8px 16px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: #f0f0f0;
+            border-radius: 20px;
+        }
+        #imageInput { display: none; }
+
+        .image-preview-container, .audio-preview-container {
+            margin-bottom: 10px;
+            display: none;
+        }
+        .image-preview-container.active, .audio-preview-container.active { display: block; }
+
+        .image-preview, .audio-preview {
+            position: relative;
+            display: inline-block;
+        }
+        .image-preview img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 12px;
+            border: 2px solid #667eea;
+        }
+        .remove-media {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .recording-indicator {
+            color: #ff4444;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .recording-dot {
+            width: 10px;
+            height: 10px;
+            background: #ff4444;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        .url-input-container {
+            display: none;
+            margin-bottom: 10px;
+        }
+        .url-input-container.active { display: flex; gap: 10px; }
+        #imageUrlInput {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div>
+                <h2>💬 Chat Gemini Multimodal</h2>
+                <div class="session-info">Session: <span id="sessionId">Nouvelle session...</span></div>
+            </div>
+            <button onclick="newSession()" style="padding: 8px 16px; font-size: 12px;">
+                🔄 Nouvelle conversation
+            </button>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-content">
+                    👋 Salut ! Je suis ton assistant. Tu peux m'envoyer du texte, des images et même des messages vocaux ! 🎤
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-area">
+            <div class="mode-selector">
+                <button class="mode-btn active" onclick="setMode('simple')" id="modeSimple">📝 Mode Simple</button>
+                <button class="mode-btn" onclick="setMode('stream')" id="modeStream">⚡ Mode Streaming</button>
+            </div>
+
+            <div class="media-controls">
+                <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload(event)">
+                <button class="media-btn" onclick="document.getElementById('imageInput').click()">📎 Image</button>
+                <button class="media-btn" onclick="toggleUrlInput()">🔗 URL Image</button>
+                <button class="media-btn" id="recordBtn" onclick="toggleRecording()">🎤 <span id="recordText">Enregistrer</span></button>
+                <div class="recording-indicator" id="recordingIndicator" style="display:none;">
+                    <div class="recording-dot"></div>
+                    <span id="recordTimer">00:00</span>
+                </div>
+            </div>
+
+            <div class="url-input-container" id="urlInputContainer">
+                <input type="text" id="imageUrlInput" placeholder="https://example.com/image.jpg">
+                <button onclick="loadImageFromUrl()" style="padding: 8px 16px; font-size: 12px;">Charger</button>
+            </div>
+
+            <div class="image-preview-container" id="imagePreviewContainer">
+                <div class="image-preview">
+                    <img id="imagePreview" src="" alt="Preview">
+                    <button class="remove-media" onclick="removeImage()">×</button>
+                </div>
+            </div>
+
+            <div class="audio-preview-container" id="audioPreviewContainer">
+                <div class="audio-preview">
+                    <audio controls id="audioPreviewElement"></audio>
+                    <button class="remove-media" onclick="removeAudio()">×</button>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <textarea id="messageInput" placeholder="Écris ton message ou envoie un vocal..." onkeypress="handleKeyPress(event)" rows="1"></textarea>
+                <button onclick="sendMessage()" id="sendBtn">Envoyer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        let currentMode = 'simple';
+        let currentImage = null; // { type: 'base64' | 'url', data: string }
+        let currentAudio = null; // { blob: Blob, url: string, base64: string }
+
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordStartTime = null;
+        let recordTimerInterval = null;
+
+        function generateSessionId() {
+            return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function initSession() {
+            sessionId = generateSessionId();
+            document.getElementById('sessionId').textContent = sessionId.substring(0, 20) + '...';
+        }
+
+        function newSession() {
+            if (confirm('Commencer une nouvelle conversation ?')) {
+                document.getElementById('chatMessages').innerHTML = `
+                    <div class="message assistant">
+                        <div class="message-content">
+                            👋 Nouvelle conversation démarrée ! Envoie-moi du texte, une image ou un message vocal.
+                        </div>
+                    </div>
+                `;
+                initSession();
+                removeImage();
+                removeAudio();
+            }
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('modeSimple').classList.toggle('active', mode === 'simple');
+            document.getElementById('modeStream').classList.toggle('active', mode === 'stream');
+        }
+
+        // === Gestion des images ===
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentImage = { type: 'base64', data: e.target.result };
+                showImagePreview(e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function toggleUrlInput() {
+            const container = document.getElementById('urlInputContainer');
+            container.classList.toggle('active');
+        }
+
+        function loadImageFromUrl() {
+            const url = document.getElementById('imageUrlInput').value.trim();
+            if (!url) return alert('Entre une URL valide');
+            currentImage = { type: 'url', data: url };
+            showImagePreview(url);
+            document.getElementById('urlInputContainer').classList.remove('active');
+            document.getElementById('imageUrlInput').value = '';
+        }
+
+        function showImagePreview(src) {
+            document.getElementById('imagePreview').src = src;
+            document.getElementById('imagePreviewContainer').classList.add('active');
+        }
+
+        function removeImage() {
+            currentImage = null;
+            document.getElementById('imagePreviewContainer').classList.remove('active');
+            document.getElementById('imageInput').value = '';
+            document.getElementById('imageUrlInput').value = '';
+        }
+
+        // === Gestion de l'enregistrement vocal ===
+        async function toggleRecording() {
+            if (!mediaRecorder || mediaRecorder.state === "inactive") {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+
+                        // Convertir en base64 pour l'envoi
+                        const reader = new FileReader();
+                        reader.onload = function() {
+                            currentAudio = {
+                                blob: audioBlob,
+                                url: audioUrl,
+                                base64: reader.result
+                            };
+                            showAudioPreview(audioUrl);
+                        };
+                        reader.readAsDataURL(audioBlob);
+
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    document.getElementById('recordText').textContent = "Arrêter";
+                    document.getElementById('recordingIndicator').style.display = 'flex';
+                    recordStartTime = Date.now();
+                    updateRecordTimer();
+                    recordTimerInterval = setInterval(updateRecordTimer, 1000);
+                } catch (err) {
+                    alert("Impossible d'accéder au microphone : " + err.message);
+                }
+            } else {
+                mediaRecorder.stop();
+                document.getElementById('recordText').textContent = "Enregistrer";
+                document.getElementById('recordingIndicator').style.display = 'none';
+                clearInterval(recordTimerInterval);
+            }
+        }
+
+        function updateRecordTimer() {
+            if (!recordStartTime) return;
+            const elapsed = Math.floor((Date.now() - recordStartTime) / 1000);
+            const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+            const secs = String(elapsed % 60).padStart(2, '0');
+            document.getElementById('recordTimer').textContent = `${mins}:${secs}`;
+        }
+
+        function showAudioPreview(src) {
+            const audioElement = document.getElementById('audioPreviewElement');
+            audioElement.src = src;
+            document.getElementById('audioPreviewContainer').classList.add('active');
+        }
+
+        function removeAudio() {
+            currentAudio = null;
+            document.getElementById('audioPreviewContainer').classList.remove('active');
+            document.getElementById('audioPreviewElement').src = '';
+        }
+
+        // === Affichage des messages ===
+        function addMessage(text, isUser = false, imageSrc = null, audioSrc = null) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
+            
+            let content = `<div class="message-content">`;
+            if (imageSrc) content += `<img src="${imageSrc}" class="message-image">`;
+            if (audioSrc) content += `<div class="message-audio"><audio controls src="${audioSrc}"></audio></div>`;
+            if (text) content += isUser ? text : formatMarkdown(text);
+            content += `</div>`;
+            
+            messageDiv.innerHTML = content;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function formatMarkdown(text) {
+            let html = text;
+            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            html = html.replace(/^\* (.+)$/gim, '<li>$1</li>');
+            html = html.replace(/(<li>[\s\S]*?<\/li>)/, '<ul>$1</ul>');
+            html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+            html = html.replace(/\n\n/g, '</p><p>');
+            html = '<p>' + html + '</p>';
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+
+        function showTypingIndicator() {
+            const messagesDiv = document.getElementById('chatMessages');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message assistant';
+            typingDiv.id = 'typingIndicator';
+            typingDiv.innerHTML = `
+                <div class="typing-indicator active">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            messagesDiv.appendChild(typingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) indicator.remove();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message && !currentImage && !currentAudio) {
+                alert('Écris un message, ajoute une image ou enregistre un vocal');
+                return;
+            }
+
+            if (!sessionId) initSession();
+
+            // Afficher le message utilisateur
+            const imageDisplay = currentImage ? 
+                (currentImage.type === 'url' ? currentImage.data : document.getElementById('imagePreview').src) : null;
+            const audioDisplay = currentAudio ? currentAudio.url : null;
+            addMessage(message || "🎤 Message vocal", true, imageDisplay, audioDisplay);
+
+            input.value = '';
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+
+            if (currentMode === 'simple') {
+                await sendSimpleMessage(message);
+            } else {
+                await sendStreamMessage(message);
+            }
+
+            removeImage();
+            removeAudio();
+            sendBtn.disabled = false;
+        }
+
+        async function sendSimpleMessage(message) {
+            showTypingIndicator();
+            try {
+                const payload = {
+                    message: message || "",
+                    session_id: sessionId
+                };
+
+                if (currentImage) {
+                    if (currentImage.type === 'base64') payload.image_base64 = currentImage.data;
+                    else payload.image_url = currentImage.data;
+                }
+
+                if (currentAudio) {
+                    payload.audio_base64 = currentAudio.base64;
+                }
+
+                const response = await fetch('http://127.0.0.1:8000/api/chat/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                removeTypingIndicator();
+
+                if (data.error) {
+                    addMessage('❌ Erreur : ' + data.error);
+                } else {
+                    addMessage(data.response);
+                }
+            } catch (error) {
+                removeTypingIndicator();
+                addMessage('❌ Erreur réseau : ' + error.message);
+            }
+        }
+
+        async function sendStreamMessage(message) {
+            showTypingIndicator();
+            try {
+                const payload = {
+                    message: message || "",
+                    session_id: sessionId
+                };
+
+                if (currentImage) {
+                    if (currentImage.type === 'base64') payload.image_base64 = currentImage.data;
+                    else payload.image_url = currentImage.data;
+                }
+
+                if (currentAudio) {
+                    payload.audio_base64 = currentAudio.base64;
+                }
+
+                const response = await fetch('http://127.0.0.1:8000/api/chat/stream/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                removeTypingIndicator();
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let assistantMessageDiv = null;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6);
+                            if (dataStr === '[DONE]') break;
+
+                            try {
+                                const json = JSON.parse(dataStr);
+                                if (json.text) {
+                                    if (!assistantMessageDiv) {
+                                        const messagesDiv = document.getElementById('chatMessages');
+                                        const messageDiv = document.createElement('div');
+                                        messageDiv.className = 'message assistant';
+                                        messageDiv.innerHTML = '<div class="message-content"></div>';
+                                        messagesDiv.appendChild(messageDiv);
+                                        assistantMessageDiv = messageDiv.querySelector('.message-content');
+                                        assistantMessageDiv.dataset.rawText = '';
+                                    }
+                                    assistantMessageDiv.dataset.rawText += json.text;
+                                    assistantMessageDiv.innerHTML = formatMarkdown(assistantMessageDiv.dataset.rawText);
+                                    document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+            } catch (error) {
+                removeTypingIndicator();
+                addMessage('❌ Erreur streaming : ' + error.message);
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        window.onload = function() {
+            initSession();
+
+            const textarea = document.getElementById('messageInput');
+            textarea.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+        };
+    </script>
+</body>
+</html>
