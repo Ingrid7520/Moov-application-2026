@@ -8,6 +8,7 @@ import 'screens/home/home_screen.dart';
 import 'screens/diagnostic/diagnostic_screen.dart';
 import 'screens/market/market_screen.dart';
 import 'screens/chat/chat_screen.dart';
+import 'services/user_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,23 +47,10 @@ class AgriSmartApp extends StatelessWidget {
 class AuthCheck extends StatelessWidget {
   const AuthCheck({super.key});
 
-  static const _storage = FlutterSecureStorage();
-
-  /// Vérifie l'existence d'un token JWT dans le stockage sécurisé
-  Future<bool> _hasToken() async {
-    try {
-      final token = await _storage.read(key: 'jwt_token');
-      return token != null && token.isNotEmpty;
-    } catch (e) {
-      print("Erreur lors de la lecture du token: $e");
-      return false;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<bool>(
-      future: _hasToken(),
+      future: UserService.isLoggedIn(),
       builder: (context, snapshot) {
         // ===== ÉTAT 1: En attente de la vérification =====
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -142,6 +130,10 @@ class AuthCheck extends StatelessWidget {
 // STRUCTURE PRINCIPALE DE L'APPLICATION (NAVIGATION BAR)
 // =============================================================================
 /// Accessible après la connexion via : Navigator.pushAndRemoveUntil(...)
+/// Navigation conditionnelle basée sur le type d'utilisateur :
+/// - Producteur (producer) ou Les deux (both) → 5 pages (avec Diagnostic)
+/// - Acheteur uniquement (buyer) → 4 pages (sans Diagnostic)
+/// - Admin → 5 pages
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
 
@@ -151,18 +143,106 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
+  bool _isProducer = false;
+  bool _isLoading = true;
 
-  // Liste des écrans principaux
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const DiagnosticScreen(),
-    const MarketScreen(),
-    const ChatScreen(),
-    const ProfileScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadUserType();
+  }
+
+  /// Charger le type d'utilisateur depuis le stockage
+  Future<void> _loadUserType() async {
+    final isProducer = await UserService.isProducer();
+    setState(() {
+      _isProducer = isProducer;
+      _isLoading = false;
+    });
+  }
+
+  /// Liste des écrans selon le type d'utilisateur
+  List<Widget> get _screens {
+    if (_isProducer) {
+      // Producteur / Both / Admin → 5 pages avec Diagnostic
+      return const [
+        HomeScreen(),
+        DiagnosticScreen(),
+        MarketScreen(),
+        ChatScreen(),
+        ProfileScreen(),
+      ];
+    } else {
+      // Acheteur uniquement → 4 pages sans Diagnostic
+      return const [
+        HomeScreen(),
+        MarketScreen(),
+        ChatScreen(),
+        ProfileScreen(),
+      ];
+    }
+  }
+
+  /// Items de la barre de navigation selon le type d'utilisateur
+  List<BottomNavigationBarItem> get _navItems {
+    if (_isProducer) {
+      // Producteur / Both / Admin → 5 items
+      return const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home),
+          label: 'Accueil',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.camera_alt),
+          label: 'Diagnostic',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.trending_up),
+          label: 'Marchés',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.message),
+          label: 'Chat',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person),
+          label: 'Profil',
+        ),
+      ];
+    } else {
+      // Acheteur uniquement → 4 items
+      return const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home),
+          label: 'Accueil',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.trending_up),
+          label: 'Marchés',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.message),
+          label: 'Chat',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person),
+          label: 'Profil',
+        ),
+      ];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Afficher un loader pendant le chargement du type d'utilisateur
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.green),
+        ),
+      );
+    }
+
     return Scaffold(
       body: _screens[_currentIndex],
       bottomNavigationBar: Container(
@@ -181,28 +261,7 @@ class _MainScaffoldState extends State<MainScaffold> {
           unselectedItemColor: Colors.grey[400],
           showUnselectedLabels: true,
           elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Accueil',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.camera_alt),
-              label: 'Diagnostic',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.trending_up),
-              label: 'Marchés',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.message),
-              label: 'Chat',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'Profil',
-            ),
-          ],
+          items: _navItems,
         ),
       ),
     );

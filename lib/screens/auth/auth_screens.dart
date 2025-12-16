@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../services/user_service.dart'; // ← AJOUT IMPORTANT
+import '../../main.dart'; // ← Pour MainScaffold
 import '../home/home_screen.dart';
 import '../diagnostic/diagnostic_screen.dart';
 import '../market/market_screen.dart';
@@ -333,6 +335,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
   }
 
+  // ============================================================================
+  // 🔥 MODIFIÉ : Sauvegarde des données utilisateur avec UserService
+  // ============================================================================
   Future<void> _verifyOtp() async {
     if (_otpCode.length != 6) {
       _showError("Veuillez entrer les 6 chiffres");
@@ -358,27 +363,37 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "phone_number": widget.phoneNumber,
-          "code": _otpCode,  // ✅ Utiliser "code" au lieu de "otp"
+          "code": _otpCode,
         }),
       );
 
       print("Status Code: ${response.statusCode}");
       print("Response Body: ${response.body}");
 
-      final data = jsonDecode(response.body);
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
 
       if (response.statusCode == 200) {
-        // Vérifier si le token existe (peut être 'access_token' ou 'token')
+        // Vérifier si le token existe
         final token = data['access_token'] ?? data['token'];
 
         if (token != null) {
-          // Sauvegarde du token JWT
-          await _storage.write(key: 'jwt_token', value: token);
+          // ===== MODIFICATION IMPORTANTE : Utiliser UserService =====
+          // 1. Sauvegarder le token JWT
+          await UserService.saveToken(token);
 
-          print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-          print("✅ TOKEN SAUVEGARDÉ AVEC SUCCÈS");
-          print("Token: ${token.substring(0, 20)}...");
-          print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+          // 2. Sauvegarder les données utilisateur (CRITIQUE pour la navigation conditionnelle)
+          if (data['user'] != null) {
+            await UserService.saveUserData(data['user']);
+
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            print("✅ DONNÉES UTILISATEUR SAUVEGARDÉES");
+            print("Token: ${token.substring(0, 20)}...");
+            print("User Type: ${data['user']['user_type']}");
+            print("Name: ${data['user']['name']}");
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+          } else {
+            print("⚠️ ATTENTION : 'user' absent dans la réponse API");
+          }
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -389,7 +404,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               ),
             );
 
-            // Redirection vers l'écran principal
+            // Redirection vers l'écran principal (navigation conditionnelle gérée dans MainScaffold)
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (context) => const MainScaffold()),
@@ -451,7 +466,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Nouveau code envoyé !'),
+              content: Text('Code renvoyé !'),
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
             ),
@@ -459,7 +474,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         }
       }
     } catch (e) {
-      _showError("Erreur lors du renvoi: $e");
+      print("❌ Erreur renvoie code: $e");
     }
   }
 
@@ -487,10 +502,26 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
+        padding: const EdgeInsets.all(32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // En-tête
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.green[400]!, Colors.green[700]!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline, color: Colors.white, size: 50),
+            ),
+
+            const SizedBox(height: 32),
+
             const Text(
               "Vérification",
               style: TextStyle(
@@ -498,124 +529,118 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 12),
+
             Text(
               "Code envoyé au ${widget.phoneNumber}",
-              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+              style: const TextStyle(color: Colors.grey, fontSize: 14),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 40),
 
-            // Champs OTP
+            const SizedBox(height: 48),
+
+            // Champs OTP (6 digits)
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: List.generate(6, (index) {
                 return SizedBox(
                   width: 45,
-                  height: 55,
                   child: TextField(
                     controller: _controllers[index],
                     focusNode: _focusNodes[index],
-                    onChanged: (value) {
-                      if (value.length == 1 && index < 5) {
-                        FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
-                      }
-                      if (value.isEmpty && index > 0) {
-                        FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
-                      }
-
-                      // ✅ Vérification automatique quand les 6 chiffres sont entrés
-                      _checkAutoVerify();
-                    },
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    inputFormatters: [
-                      LengthLimitingTextInputFormatter(1),
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    keyboardType: TextInputType.number,
+                    maxLength: 1,
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
-                      contentPadding: EdgeInsets.zero,
+                      counterText: "",
+                      filled: true,
+                      fillColor: Colors.grey[100],
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.green.shade700,
-                          width: 2,
-                        ),
+                        borderSide: BorderSide(color: Colors.green[700]!, width: 2),
                       ),
-                      fillColor: Colors.grey[100],
-                      filled: true,
                     ),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (value) {
+                      if (value.isNotEmpty) {
+                        // Passer au champ suivant
+                        if (index < 5) {
+                          _focusNodes[index + 1].requestFocus();
+                        } else {
+                          // Dernier champ, lancer la vérification auto
+                          _focusNodes[index].unfocus();
+                          _checkAutoVerify();
+                        }
+                      } else {
+                        // Revenir au champ précédent si suppression
+                        if (index > 0) {
+                          _focusNodes[index - 1].requestFocus();
+                        }
+                      }
+                    },
                   ),
                 );
               }),
             ),
 
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
 
-            // Indicateur de vérification automatique
-            if (_isLoading)
-              Center(
-                child: Column(
-                  children: [
-                    const CircularProgressIndicator(
-                      color: Colors.green,
-                      strokeWidth: 3,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Vérification en cours...",
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
+            // Bouton Vérifier
+            ElevatedButton(
+              onPressed: _isLoading ? null : _verifyOtp,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 2,
+              ),
+              child: _isLoading
+                  ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
                 ),
               )
-            else
-            // Bouton Vérifier (manuel si besoin)
-              ElevatedButton(
-                onPressed: _verifyOtp,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[700],
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 2,
-                ),
-                child: const Text(
-                  "Vérifier manuellement",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  : const Text(
+                "Vérifier",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+            ),
 
             const SizedBox(height: 24),
 
-            // Bouton Renvoyer le code
-            Center(
-              child: TextButton(
-                onPressed: _resendCode,
-                child: Text(
-                  "Renvoyer le code",
-                  style: TextStyle(
-                    color: Colors.green[700],
-                    fontWeight: FontWeight.bold,
+            // Lien Renvoyer le code
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text("Vous n'avez pas reçu le code ?"),
+                TextButton(
+                  onPressed: _resendCode,
+                  child: Text(
+                    "Renvoyer",
+                    style: TextStyle(
+                      color: Colors.green[700],
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ],
         ),
@@ -654,7 +679,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final phone = _phoneController.text.trim();
     final location = _locationController.text.trim();
 
-    if (name.isEmpty || phone.length < 8 || location.isEmpty) {
+    if (name.isEmpty || phone.length < 8) {
       _showError("Veuillez remplir tous les champs");
       return;
     }
@@ -663,12 +688,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      print("INSCRIPTION NOUVEAU COMPTE");
-      print("URL: $baseUrl/auth/register");
+      print("INSCRIPTION");
       print("Name: $name");
       print("Phone: $phone");
       print("Location: $location");
-      print("Type: $_userType");
+      print("User Type: $_userType");
       print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
       final response = await http.post(
@@ -687,8 +711,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final data = jsonDecode(response.body);
 
-      // ✅ Accepter 200 ET 201 (Created)
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         if (data.containsKey('test_otp')) {
           print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
           print("CODE OTP (DEV): ${data['test_otp']}");
@@ -704,7 +727,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
 
         if (mounted) {
-          Navigator.pushReplacement(
+          Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => OtpVerificationScreen(
@@ -753,26 +776,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
+        padding: const EdgeInsets.all(32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Logo
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.green[400]!, Colors.green[700]!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.spa, color: Colors.white, size: 40),
+            ),
+
+            const SizedBox(height: 24),
+
             const Text(
-              "Créer un compte",
+              "Inscription",
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
             ),
+
             const SizedBox(height: 8),
+
             const Text(
-              "Rejoignez la communauté AgriSmart",
-              style: TextStyle(color: Colors.grey, fontSize: 16),
+              "Créez votre compte AgriSmart CI",
+              style: TextStyle(color: Colors.grey, fontSize: 14),
             ),
+
             const SizedBox(height: 32),
 
-            // Champ Nom complet
+            // Champ Nom
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey[100],
@@ -781,7 +823,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: TextField(
                 controller: _nameController,
                 decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.person_outline, color: Colors.green[700]),
+                  prefixIcon: Icon(Icons.person, color: Colors.green[700]),
                   hintText: "Nom complet",
                   hintStyle: TextStyle(color: Colors.grey[500]),
                   border: InputBorder.none,
@@ -795,7 +837,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 16),
 
-            // Champ Numéro de téléphone
+            // Champ Téléphone
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey[100],
@@ -958,74 +1000,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ],
             ),
             const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// STRUCTURE PRINCIPALE DE L'APPLICATION (MainScaffold)
-// =============================================================================
-class MainScaffold extends StatefulWidget {
-  const MainScaffold({super.key});
-
-  @override
-  State<MainScaffold> createState() => _MainScaffoldState();
-}
-
-class _MainScaffoldState extends State<MainScaffold> {
-  int _currentIndex = 0;
-
-  // Liste des écrans principaux
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    DiagnosticScreen(),
-    MarketScreen(),
-    ChatScreen(),
-    ProfileScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: _screens[_currentIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey.shade200)),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: Colors.green[700],
-          unselectedItemColor: Colors.grey[400],
-          showUnselectedLabels: true,
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Accueil',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.camera_alt),
-              label: 'Diagnostic',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.trending_up),
-              label: 'Marchés',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.message),
-              label: 'Chat',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person),
-              label: 'Profil',
-            ),
           ],
         ),
       ),
