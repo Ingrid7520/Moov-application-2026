@@ -6,7 +6,8 @@ import 'screens/auth/auth_screens.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/diagnostic/diagnostic_screen.dart';
-import 'screens/market/market_screen.dart';
+import 'screens/market/market_screen.dart'; // Pour producteurs (prix du marché)
+import 'screens/marketplace/marketplace_screen.dart'; // Pour acheteurs (achats)
 import 'screens/chat/chat_screen.dart';
 import 'services/user_service.dart';
 
@@ -32,7 +33,6 @@ class AgriSmartApp extends StatelessWidget {
         useMaterial3: true,
         textTheme: GoogleFonts.montserratTextTheme(),
       ),
-      // Vérification de l'authentification au démarrage
       home: const AuthCheck(),
     );
   }
@@ -41,9 +41,6 @@ class AgriSmartApp extends StatelessWidget {
 // =============================================================================
 // VÉRIFICATION DE L'AUTHENTIFICATION AU DÉMARRAGE
 // =============================================================================
-/// Ce widget vérifie si un token JWT est stocké dans le secure storage
-/// - Si OUI → Redirection vers MainScaffold (application principale)
-/// - Si NON → Redirection vers LoginScreen (écran de connexion)
 class AuthCheck extends StatelessWidget {
   const AuthCheck({super.key});
 
@@ -52,7 +49,6 @@ class AuthCheck extends StatelessWidget {
     return FutureBuilder<bool>(
       future: UserService.isLoggedIn(),
       builder: (context, snapshot) {
-        // ===== ÉTAT 1: En attente de la vérification =====
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
             backgroundColor: Colors.white,
@@ -60,7 +56,6 @@ class AuthCheck extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo animé avec gradient
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -103,7 +98,6 @@ class AuthCheck extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 40),
-                  // Indicateur de chargement
                   const CircularProgressIndicator(
                     color: Colors.green,
                     strokeWidth: 3,
@@ -114,12 +108,10 @@ class AuthCheck extends StatelessWidget {
           );
         }
 
-        // ===== ÉTAT 2: Token trouvé → Accès direct à l'application =====
         if (snapshot.hasData && snapshot.data == true) {
           return const MainScaffold();
         }
 
-        // ===== ÉTAT 3: Pas de token → Écran de connexion =====
         return const LoginScreen();
       },
     );
@@ -129,11 +121,6 @@ class AuthCheck extends StatelessWidget {
 // =============================================================================
 // STRUCTURE PRINCIPALE DE L'APPLICATION (NAVIGATION BAR)
 // =============================================================================
-/// Accessible après la connexion via : Navigator.pushAndRemoveUntil(...)
-/// Navigation conditionnelle basée sur le type d'utilisateur :
-/// - Producteur (producer) ou Les deux (both) → 5 pages (avec Diagnostic)
-/// - Acheteur uniquement (buyer) → 4 pages (sans Diagnostic)
-/// - Admin → 5 pages
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
 
@@ -152,7 +139,6 @@ class _MainScaffoldState extends State<MainScaffold> {
     _loadUserType();
   }
 
-  /// Charger le type d'utilisateur depuis le stockage
   Future<void> _loadUserType() async {
     final isProducer = await UserService.isProducer();
     setState(() {
@@ -164,19 +150,19 @@ class _MainScaffoldState extends State<MainScaffold> {
   /// Liste des écrans selon le type d'utilisateur
   List<Widget> get _screens {
     if (_isProducer) {
-      // Producteur / Both / Admin → 5 pages avec Diagnostic
+      // Producteur / Both / Admin → 5 pages avec Diagnostic + Marchés (prix)
       return const [
         HomeScreen(),
         DiagnosticScreen(),
-        MarketScreen(),
+        MarketScreen(), // ← Écran prix du marché pour producteurs
         ChatScreen(),
         ProfileScreen(),
       ];
     } else {
-      // Acheteur uniquement → 4 pages sans Diagnostic
+      // Acheteur uniquement → 4 pages sans Diagnostic + Achats (marketplace)
       return const [
         HomeScreen(),
-        MarketScreen(),
+        MarketplaceScreen(), // ← Écran achats pour acheteurs
         ChatScreen(),
         ProfileScreen(),
       ];
@@ -186,7 +172,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   /// Items de la barre de navigation selon le type d'utilisateur
   List<BottomNavigationBarItem> get _navItems {
     if (_isProducer) {
-      // Producteur / Both / Admin → 5 items
+      // Producteur / Both / Admin → 5 items avec "Marchés"
       return const [
         BottomNavigationBarItem(
           icon: Icon(Icons.home),
@@ -197,8 +183,8 @@ class _MainScaffoldState extends State<MainScaffold> {
           label: 'Diagnostic',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.trending_up),
-          label: 'Marchés',
+          icon: Icon(Icons.trending_up), // Icône prix du marché
+          label: 'Marchés', // Label pour producteurs
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.message),
@@ -210,15 +196,15 @@ class _MainScaffoldState extends State<MainScaffold> {
         ),
       ];
     } else {
-      // Acheteur uniquement → 4 items
+      // Acheteur uniquement → 4 items avec "Achats"
       return const [
         BottomNavigationBarItem(
           icon: Icon(Icons.home),
           label: 'Accueil',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.trending_up),
-          label: 'Marchés',
+          icon: Icon(Icons.shopping_cart), // Icône achats
+          label: 'Achats', // Label pour acheteurs
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.message),
@@ -234,7 +220,6 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    // Afficher un loader pendant le chargement du type d'utilisateur
     if (_isLoading) {
       return const Scaffold(
         body: Center(
