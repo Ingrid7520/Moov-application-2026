@@ -9,7 +9,7 @@ const String baseUrl = 'http://10.0.2.2:8001/api';
 
 class PaymentConfirmationScreen extends StatefulWidget {
   final String transactionId;
-  final String otpCode; // Pour le mode dev
+  final String otpCode; // Pour affichage en mode dev (optionnel)
   final double amount;
   final String productName;
   final double quantity;
@@ -35,14 +35,13 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
   final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   bool _isProcessing = false;
+  bool _showOtpHint = true; // Afficher l'indice OTP
 
   @override
   void initState() {
     super.initState();
-    // En mode dev, pré-remplir l'OTP
-    if (widget.otpCode.isNotEmpty) {
-      _fillOtp(widget.otpCode);
-    }
+    // ← SUPPRIMÉ: Pas de pré-remplissage automatique
+    // L'utilisateur doit saisir manuellement
   }
 
   @override
@@ -56,17 +55,11 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
     super.dispose();
   }
 
-  void _fillOtp(String otp) {
-    for (int i = 0; i < otp.length && i < 6; i++) {
-      _controllers[i].text = otp[i];
-    }
-  }
-
   String get _otpCode => _controllers.map((c) => c.text).join();
 
   Future<void> _confirmPayment() async {
     if (_otpCode.length != 6) {
-      _showError("Veuillez entrer les 6 chiffres");
+      _showError("Veuillez entrer les 6 chiffres du code OTP");
       return;
     }
 
@@ -107,7 +100,7 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       }
     } catch (e) {
       print('❌ Erreur: $e');
-      _showError('Erreur: $e');
+      _showError('Code OTP invalide. Veuillez réessayer.');
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -169,6 +162,30 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
                   _buildInfoRow('Livraison', _formatDate(widget.deliveryDate)),
                   const Divider(height: 16),
                   _buildInfoRow('Lieu', widget.deliveryLocation ?? 'À définir'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.security, color: Colors.green[700], size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Transaction sécurisée par blockchain',
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -290,7 +307,7 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
             const SizedBox(height: 12),
 
             const Text(
-              'Un code à 6 chiffres a été envoyé',
+              'Un code à 6 chiffres a été envoyé à votre téléphone',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey,
@@ -300,7 +317,7 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
 
             const SizedBox(height: 40),
 
-            // Champs OTP
+            // ← Champs OTP avec masquage (affichage en étoiles)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: List.generate(6, (index) {
@@ -312,6 +329,8 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
                     maxLength: 1,
+                    obscureText: true, // ← MASQUAGE EN ÉTOILES
+                    obscuringCharacter: '●', // ← Caractère de masquage
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -413,31 +432,64 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
 
             const SizedBox(height: 24),
 
-            // Note de dev
-            if (widget.otpCode.isNotEmpty) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Mode développement : Code OTP pré-rempli (${widget.otpCode})',
-                        style: TextStyle(
-                          color: Colors.blue[700],
-                          fontSize: 12,
+            // ← Indice OTP (mode développement)
+            if (_showOtpHint && widget.otpCode.isNotEmpty) ...[
+              GestureDetector(
+                onTap: () {
+                  setState(() => _showOtpHint = false);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Mode dev : Code OTP = ${widget.otpCode} (Appuyez pour masquer)',
+                          style: TextStyle(
+                            color: Colors.blue[700],
+                            fontSize: 12,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
+
+            const SizedBox(height: 16),
+
+            // Info blockchain
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.security, color: Colors.green[700], size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Paiement sécurisé par blockchain AgriSmart',
+                      style: TextStyle(
+                        color: Colors.green[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
