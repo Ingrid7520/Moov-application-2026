@@ -2,6 +2,7 @@
 """
 Service pour gérer les paiements Moov Money (MODE SIMULATION)
 Gère les transactions, mise à jour des stocks, et création des commandes
+Intégration blockchain pour la sécurité et la traçabilité
 """
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -12,6 +13,9 @@ import string
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Import du service blockchain
+from app.services.blockchain_simulation import BlockchainSimulationService
 
 class MoovPaymentService:
     """Service de paiement Moov Money simulé"""
@@ -231,8 +235,23 @@ class MoovPaymentService:
             
             await db.purchases.insert_one(purchase_data)
             
+            # 6. ← NOUVEAU: Enregistrer sur la blockchain
+            blockchain_service = BlockchainSimulationService(db)
+            blockchain_result = await blockchain_service.create_transaction_record(
+                transaction_id=transaction_id,
+                product_id=transaction["product_id"],
+                buyer_id=transaction["buyer_id"],
+                seller_id=transaction["seller_id"],
+                amount=transaction["total_amount"],
+                quantity=transaction["quantity"],
+                product_name=transaction["product_name"]
+            )
+            
             logger.info(f"✅ Paiement confirmé: {transaction_id}")
             logger.info(f"📦 Stock mis à jour: {product['name']} - Nouveau stock: {new_quantity} kg")
+            
+            if blockchain_result.get("status") == "success":
+                logger.info(f"🔗 Transaction enregistrée sur blockchain: {blockchain_result['transaction_hash'][:16]}...")
             
             return {
                 "status": "success",
@@ -243,6 +262,11 @@ class MoovPaymentService:
                 "new_product_stock": new_quantity,
                 "delivery_date": transaction.get("delivery_date"),
                 "delivery_location": transaction.get("delivery_location"),
+                "blockchain": {
+                    "transaction_hash": blockchain_result.get("transaction_hash"),
+                    "blockchain_id": blockchain_result.get("blockchain_id"),
+                    "secured": blockchain_result.get("status") == "success",
+                },
                 "moov_response": {
                     "status": "success",
                     "reference": payment_reference
