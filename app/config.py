@@ -1,6 +1,15 @@
 # app/config.py
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+from dotenv import load_dotenv
+
+# ✅ FORCER le chargement du fichier .env
+env_path = Path(__file__).parent.parent / '.env'
+print(f"🔍 Chargement .env depuis: {env_path}")
+load_dotenv(dotenv_path=env_path, override=True)
+
 
 class Settings(BaseSettings):
     # --- Base de données ---
@@ -35,6 +44,9 @@ class Settings(BaseSettings):
     MOOV_API_KEY: str = "test_api_key"  # Clé test par défaut (simulation)
     MOOV_MERCHANT_ID: str = "merchant_test"  # ID marchand test
 
+    # --- CORS ---
+    CORS_ORIGINS: list = ["*"]
+
     # Configuration Pydantic V2
     model_config = SettingsConfigDict(
         env_file=".env", 
@@ -42,4 +54,15 @@ class Settings(BaseSettings):
         extra="ignore"         # IMPORTANT: Ignore les variables du .env qui ne sont pas déclarées ici (évite le crash)
     )
 
+
 settings = Settings()
+
+# ✅ Logs de vérification au chargement
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("CONFIGURATION CHARGÉE")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print(f"📦 MongoDB: {settings.MONGODB_URL}")
+print(f"🗄️  Database: {settings.MONGODB_DATABASE}")
+print(f"📱 AT Username: {settings.AT_USERNAME}")
+print(f"💳 Moov Merchant: {settings.MOOV_MERCHANT_ID}")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")

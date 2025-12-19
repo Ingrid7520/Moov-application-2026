@@ -1,10 +1,12 @@
 """
 API Endpoints pour les paiements Moov Money
 Routes pour initier, confirmer, et gerer les transactions
+✅ AVEC CRÉATION AUTOMATIQUE DE NOTIFICATIONS (CORRIGÉ)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from datetime import datetime
 import logging
 
 from app.database import get_database
@@ -61,7 +63,10 @@ async def confirm_payment(
     request: ConfirmPaymentRequest,
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
-    """Confirmer un paiement avec OTP"""
+    """
+    Confirmer un paiement avec OTP
+    ✅ CRÉE AUTOMATIQUEMENT UNE NOTIFICATION APRÈS PAIEMENT RÉUSSI
+    """
     try:
         result = await moov_service.confirm_payment(
             db=db,
@@ -71,6 +76,70 @@ async def confirm_payment(
         
         if result.get("status") == "error":
             raise HTTPException(status_code=400, detail=result.get("message"))
+        
+        # ✅ CRÉER NOTIFICATION SI PAIEMENT RÉUSSI
+        if result.get("status") == "success":
+            try:
+                # Récupérer les infos de la transaction
+                from bson import ObjectId
+                transaction = await db.transactions.find_one({
+                    "_id": ObjectId(request.transaction_id)
+                })
+                
+                if transaction and transaction.get('status') == 'paid':
+                    # ✅ CONVERTIR ObjectId EN STRING
+                    buyer_id_str = str(transaction.get('buyer_id'))
+                    seller_id_str = str(transaction.get('seller_id'))
+                    
+                    logger.info(f"🔍 Création notifications - Buyer: {buyer_id_str}, Seller: {seller_id_str}")
+                    
+                    # Créer notification pour l'acheteur
+                    buyer_notification = {
+                        "user_id": buyer_id_str,  # ✅ STRING, PAS ObjectId
+                        "type": "payment_success",
+                        "title": "✅ Paiement réussi",
+                        "message": f"Votre achat de {transaction.get('product_name', 'produit')} ({int(transaction.get('total_amount', 0))} FCFA) a été confirmé avec succès !",
+                        "priority": "high",
+                        "data": {
+                            "transaction_id": request.transaction_id,
+                            "amount": float(transaction.get('total_amount', 0)),
+                            "product_name": str(transaction.get('product_name', 'Produit')),
+                            "payment_reference": result.get('payment_reference', '')
+                        },
+                        "is_read": False,
+                        "created_at": datetime.utcnow(),
+                        "read_at": None
+                    }
+                    
+                    result_buyer = await db.notifications.insert_one(buyer_notification)
+                    logger.info(f"📢 Notification paiement créée pour acheteur {buyer_id_str} - ID: {result_buyer.inserted_id}")
+                    
+                    # ✅ BONUS: Créer notification pour le vendeur
+                    seller_notification = {
+                        "user_id": seller_id_str,  # ✅ STRING, PAS ObjectId
+                        "type": "product_sold",
+                        "title": "💰 Vente réalisée",
+                        "message": f"Votre produit {transaction.get('product_name', 'produit')} a été vendu pour {int(transaction.get('total_amount', 0))} FCFA !",
+                        "priority": "medium",
+                        "data": {
+                            "transaction_id": request.transaction_id,
+                            "amount": float(transaction.get('total_amount', 0)),
+                            "product_name": str(transaction.get('product_name', 'Produit')),
+                            "buyer_phone": str(transaction.get('buyer_phone', ''))
+                        },
+                        "is_read": False,
+                        "created_at": datetime.utcnow(),
+                        "read_at": None
+                    }
+                    
+                    result_seller = await db.notifications.insert_one(seller_notification)
+                    logger.info(f"📢 Notification vente créée pour vendeur {seller_id_str} - ID: {result_seller.inserted_id}")
+                    
+            except Exception as notif_error:
+                # Ne pas bloquer le paiement si la notification échoue
+                logger.error(f"❌ Erreur création notification: {notif_error}")
+                import traceback
+                traceback.print_exc()
         
         return result
         

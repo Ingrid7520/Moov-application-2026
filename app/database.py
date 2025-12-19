@@ -42,7 +42,7 @@ class MongoDB:
         db = self.get_database()
         
         # Collections nécessaires
-        collections = ["users", "products", "transactions", "market_prices", "weather_data", "otp_codes"]
+        collections = ["users", "products", "transactions", "market_prices", "weather_data", "otp_codes", "diagnostics"]
         
         existing_collections = await db.list_collection_names()
         

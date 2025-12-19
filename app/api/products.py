@@ -1,4 +1,5 @@
 # app/api/products.py
+# ✅ VERSION AVEC SUPPORT IMAGES
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.database import get_database
@@ -8,13 +9,13 @@ from bson import ObjectId
 from typing import List, Optional
 from datetime import datetime
 import logging
+import base64
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/products", tags=["Products"])
 
 def to_objectid(id_str: str) -> ObjectId:
-    """Convertir un string en ObjectId MongoDB"""
     try:
         return ObjectId(id_str)
     except:
@@ -24,15 +25,49 @@ def to_objectid(id_str: str) -> ObjectId:
         )
 
 def serialize_product(product: dict) -> dict:
-    """Sérialiser un produit MongoDB"""
     if not product:
         return None
     product["id"] = str(product["_id"])
     product.pop("_id", None)
     return product
 
+def validate_images(images: List[str]) -> List[str]:
+    """
+    Valider les images base64
+    - Max 5 images
+    - Max 5MB par image
+    """
+    if not images:
+        return []
+    
+    if len(images) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 5 images autorisées"
+        )
+    
+    validated_images = []
+    for idx, img in enumerate(images):
+        # Vérifier format base64
+        if not img.startswith('data:image/'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image {idx+1}: Format invalide (doit commencer par 'data:image/')"
+            )
+        
+        # Vérifier taille (environ 5MB = 6.67MB en base64)
+        if len(img) > 7000000:  # 7MB en base64 ≈ 5MB image
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image {idx+1}: Taille maximale 5MB dépassée"
+            )
+        
+        validated_images.append(img)
+    
+    return validated_images
+
 # ============================================================================
-# CREATE - Créer un nouveau produit
+# CREATE - Créer un nouveau produit AVEC IMAGES
 # ============================================================================
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ProductResponse)
 async def create_product(
@@ -41,11 +76,10 @@ async def create_product(
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """
-    Créer un nouveau produit (authentification requise)
+    Créer un nouveau produit avec images
     
-    Seuls les producteurs peuvent créer des produits
+    - **images**: Liste de 0 à 5 images en base64 (format: data:image/png;base64,...)
     """
-    # Vérifier que l'utilisateur est producteur
     user_type = current_user.get("user_type", "")
     if user_type not in ["producer", "both", "admin"]:
         raise HTTPException(
@@ -53,7 +87,9 @@ async def create_product(
             detail="Seuls les producteurs peuvent créer des produits"
         )
     
-    # Préparer les données du produit
+    # Valider les images
+    validated_images = validate_images(product.images or [])
+    
     product_data = {
         "name": product.name,
         "product_type": product.product_type.value,
@@ -63,7 +99,7 @@ async def create_product(
         "description": product.description or "",
         "harvest_date": product.harvest_date or datetime.utcnow(),
         "quality_grade": product.quality_grade.value if product.quality_grade else "B",
-        "images": [],  # À implémenter plus tard avec upload d'images
+        "images": validated_images,  # ✅ STOCKAGE IMAGES BASE64
         "owner_id": str(current_user["_id"]),
         "owner_phone": current_user["phone_number"],
         "owner_name": current_user["name"],
@@ -74,13 +110,10 @@ async def create_product(
         "updated_at": datetime.utcnow()
     }
     
-    # Insérer dans MongoDB
     result = await db.products.insert_one(product_data)
-    
-    # Récupérer le produit créé
     created_product = await db.products.find_one({"_id": result.inserted_id})
     
-    logger.info(f"✅ Produit créé: {product.name} par {current_user['name']}")
+    logger.info(f"✅ Produit créé: {product.name} avec {len(validated_images)} image(s)")
     
     return ProductResponse(**serialize_product(created_product))
 
@@ -94,19 +127,13 @@ async def get_products(
     location: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
-    owner_id: Optional[str] = None,  # Filtrer par propriétaire
-    limit: int = 50,
+    owner_id: Optional[str] = None,
+    limit: int = 100,
     skip: int = 0,
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """
-    Lister les produits avec filtres optionnels
-    
-    - **product_type**: Filtrer par type (cocoa, cashew, etc.)
-    - **status**: Filtrer par statut (available, sold, etc.)
-    - **location**: Filtrer par localisation
-    - **owner_id**: Filtrer par propriétaire (pour "Mes produits")
-    - **min_price/max_price**: Filtrer par prix
+    Lister les produits avec images
     """
     query = {}
     
@@ -125,7 +152,6 @@ async def get_products(
         if max_price is not None:
             query["unit_price"]["$lte"] = max_price
     
-    # Récupérer les produits triés par date (plus récents en premier)
     cursor = db.products.find(query).sort("created_at", -1).skip(skip).limit(limit)
     products = await cursor.to_list(length=limit)
     
@@ -137,7 +163,7 @@ async def get_my_products(
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """
-    Récupérer tous les produits de l'utilisateur connecté
+    Récupérer tous les produits de l'utilisateur
     """
     query = {"owner_id": str(current_user["_id"])}
     
@@ -154,7 +180,7 @@ async def get_product(
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """
-    Obtenir un produit spécifique par son ID
+    Obtenir un produit avec ses images
     """
     product = await db.products.find_one({"_id": to_objectid(product_id)})
     
@@ -173,7 +199,7 @@ async def get_product(
     return ProductResponse(**serialize_product(product))
 
 # ============================================================================
-# UPDATE - Mettre à jour un produit
+# UPDATE - Mettre à jour un produit AVEC IMAGES
 # ============================================================================
 @router.put("/{product_id}", response_model=ProductResponse)
 async def update_product(
@@ -183,11 +209,8 @@ async def update_product(
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """
-    Mettre à jour un produit existant
-    
-    Seul le propriétaire du produit peut le modifier
+    Mettre à jour un produit (y compris les images)
     """
-    # Vérifier que le produit existe
     product = await db.products.find_one({"_id": to_objectid(product_id)})
     
     if not product:
@@ -196,14 +219,12 @@ async def update_product(
             detail="Produit non trouvé"
         )
     
-    # Vérifier que l'utilisateur est le propriétaire (ou admin)
     if str(product["owner_id"]) != str(current_user["_id"]) and current_user.get("user_type") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Vous n'êtes pas autorisé à modifier ce produit"
         )
     
-    # Préparer les données de mise à jour (seulement les champs fournis)
     update_data = {}
     
     if product_update.name is not None:
@@ -219,19 +240,22 @@ async def update_product(
     if product_update.quality_grade is not None:
         update_data["quality_grade"] = product_update.quality_grade.value
     
-    # Toujours mettre à jour la date de modification
+    # ✅ MISE À JOUR DES IMAGES
+    if product_update.images is not None:
+        validated_images = validate_images(product_update.images)
+        update_data["images"] = validated_images
+        logger.info(f"🖼️ {len(validated_images)} image(s) mises à jour pour produit {product_id}")
+    
     update_data["updated_at"] = datetime.utcnow()
     
-    # Appliquer les modifications
     await db.products.update_one(
         {"_id": to_objectid(product_id)},
         {"$set": update_data}
     )
     
-    # Récupérer le produit mis à jour
     updated_product = await db.products.find_one({"_id": to_objectid(product_id)})
     
-    logger.info(f"✏️ Produit mis à jour: {product_id} par {current_user['name']}")
+    logger.info(f"✏️ Produit mis à jour: {product_id}")
     
     return ProductResponse(**serialize_product(updated_product))
 
@@ -246,10 +270,7 @@ async def delete_product(
 ):
     """
     Supprimer un produit
-    
-    Seul le propriétaire du produit peut le supprimer
     """
-    # Vérifier que le produit existe
     product = await db.products.find_one({"_id": to_objectid(product_id)})
     
     if not product:
@@ -258,17 +279,15 @@ async def delete_product(
             detail="Produit non trouvé"
         )
     
-    # Vérifier que l'utilisateur est le propriétaire (ou admin)
     if str(product["owner_id"]) != str(current_user["_id"]) and current_user.get("user_type") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Vous n'êtes pas autorisé à supprimer ce produit"
         )
     
-    # Supprimer le produit
     await db.products.delete_one({"_id": to_objectid(product_id)})
     
-    logger.info(f"🗑️ Produit supprimé: {product_id} par {current_user['name']}")
+    logger.info(f"🗑️ Produit supprimé: {product_id}")
     
     return None
 
@@ -282,7 +301,7 @@ async def toggle_product_status(
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """
-    Basculer le statut d'un produit entre AVAILABLE et SOLD
+    Basculer le statut entre AVAILABLE et SOLD
     """
     product = await db.products.find_one({"_id": to_objectid(product_id)})
     
@@ -292,7 +311,6 @@ async def toggle_product_status(
     if str(product["owner_id"]) != str(current_user["_id"]):
         raise HTTPException(status_code=403, detail="Non autorisé")
     
-    # Basculer le statut
     current_status = product.get("status", "available")
     new_status = "sold" if current_status == "available" else "available"
     
