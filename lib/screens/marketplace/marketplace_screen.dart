@@ -5,7 +5,7 @@ import 'dart:convert';
 import '../../services/user_service.dart';
 import 'product_detail_screen.dart';
 
-const String baseUrl = 'http://10.0.2.2:8001/api';
+const String baseUrl = 'http://192.168.1.161:8001/api';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -265,9 +265,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image placeholder avec icône
+            // 1. OPTIMISATION : Hauteur d'image réduite de 120 à 105
             Container(
-              height: 120,
+              height: 105,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [Colors.green[300]!, Colors.green[500]!],
@@ -282,7 +282,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               child: Center(
                 child: Icon(
                   _getProductIcon(product['product_type']),
-                  size: 50,
+                  size: 40, // Taille icône légèrement réduite (50 -> 40)
                   color: Colors.white,
                 ),
               ),
@@ -291,64 +291,75 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             // Détails du produit
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                // 2. OPTIMISATION : Padding réduit de 12 à 8 pour gagner de l'espace
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min, // Important pour éviter l'extension forcée
                   children: [
                     Text(
                       product['name'] ?? 'Sans nom',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                        fontSize: 14, // Police légèrement réduite (15 -> 14)
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+
+                    // 3. OPTIMISATION : Espacement réduit drastiquement (15 -> 4)
                     const SizedBox(height: 4),
+
                     Row(
                       children: [
-                        Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
+                        Icon(Icons.location_on, size: 12, color: Colors.grey[600]),
+                        const SizedBox(width: 2),
                         Expanded(
                           child: Text(
                             product['location'] ?? 'Non spécifié',
                             style: TextStyle(
                               color: Colors.grey[600],
-                              fontSize: 12,
+                              fontSize: 11,
                             ),
+                            maxLines: 1, // Sécurité ajoutée
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
-                    const Spacer(),
+
+                    const Spacer(), // Pousse le prix vers le bas
+
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               Text(
                                 '${product['unit_price']} FCFA',
                                 style: TextStyle(
                                   color: Colors.green[700],
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                  fontSize: 15, // (16 -> 15)
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               Text(
                                 '${product['quantity']} kg',
                                 style: TextStyle(
                                   color: Colors.grey[600],
-                                  fontSize: 11,
+                                  fontSize: 10, // (11 -> 10)
                                 ),
                               ),
                             ],
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(6), // Padding icône réduit (8 -> 6)
                           decoration: BoxDecoration(
                             color: Colors.green[700],
                             borderRadius: BorderRadius.circular(8),
@@ -356,7 +367,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           child: const Icon(
                             Icons.shopping_cart,
                             color: Colors.white,
-                            size: 18,
+                            size: 16, // (18 -> 16)
                           ),
                         ),
                       ],

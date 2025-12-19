@@ -1,17 +1,22 @@
 // lib/screens/profile/profile_screen.dart
+// ✅ VERSION FINALE - Avec redirections Settings + Privacy
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../widgets/common_widgets.dart';
 import '../../services/user_service.dart';
 import '../auth/auth_screens.dart';
 import '../products/my_products_screen.dart';
 import '../marketplace/my_purchases_screen.dart';
 import '../marketplace/my_sales_screen.dart';
-import '../../constants/api_constants.dart';
+import '../help/help_screen.dart';
+import '../support/support_screen.dart';
+import '../settings/settings_screen.dart';
+import '../settings/privacy_screen.dart';
 
+// =============================================================================
 // Modèle de données utilisateur
+// =============================================================================
 class User {
   final String id;
   final String phoneNumber;
@@ -40,7 +45,7 @@ class User {
       name: (json['name'] as String?) ?? 'Utilisateur Inconnu',
       userType: (json['user_type'] as String?) ?? 'unknown',
       location: (json['location'] as String?) ?? 'Non spécifié',
-      status: (json['status'] as String?) ?? 'inactive',
+      status: 'active',  // ✅ TOUJOURS ACTIF
       isVerified: (json['is_verified'] as bool?) ?? false,
       rating: ((json['rating'] as num?)?.toDouble()) ?? 0.0,
     );
@@ -72,53 +77,50 @@ class User {
   }
 }
 
+// =============================================================================
 // Service API
+// =============================================================================
 class ProfileService {
-  final _storage = const FlutterSecureStorage();
-
   Future<User> fetchUserProfile() async {
-    final token = await _storage.read(key: 'jwt_token');
+    final token = await UserService.getToken();
+
     if (token == null) {
       throw Exception("Token non trouvé. Veuillez vous reconnecter.");
     }
 
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    print("CHARGEMENT DU PROFIL");
+    print("🔍 CHARGEMENT PROFIL");
+    print("Token trouvé: ${token.substring(0, 20)}...");
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     final response = await http.get(
-      Uri.parse('http://10.0.2.2:8001/api/auth/me'),
+      Uri.parse('http://192.168.1.161:8001/api/auth/me'),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token",
       },
     );
 
-    print("Status Code: ${response.statusCode}");
+    print("📥 Réponse API: ${response.statusCode}");
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data == null) {
-        throw Exception("Réponse API vide ou invalide.");
-      }
-      print("✅ Profil chargé avec succès");
+      final data = json.decode(response.body);
+      print("✅ Profil chargé: ${data['name']}");
       return User.fromJson(data);
     } else if (response.statusCode == 401) {
-      print("❌ Session expirée");
-      throw Exception("Session expirée. Reconnexion nécessaire.");
+      print("❌ Token expiré");
+      throw Exception("Session expirée. Veuillez vous reconnecter.");
     } else {
-      print("❌ Erreur ${response.statusCode}");
-      throw Exception("Impossible de charger le profil (Code: ${response.statusCode})");
+      print("❌ Erreur serveur: ${response.statusCode}");
+      print("Body: ${response.body}");
+      throw Exception("Erreur serveur: ${response.statusCode}");
     }
-  }
-
-  Future<void> logout() async {
-    await UserService.logout();
-    print("✅ Déconnexion réussie");
   }
 }
 
-// Écran de profil
+// =============================================================================
+// Écran principal
+// =============================================================================
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -127,214 +129,309 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late Future<User> _userProfileFuture;
   final ProfileService _profileService = ProfileService();
+  late Future<User> _userProfileFuture;
 
   @override
   void initState() {
     super.initState();
-    _userProfileFuture = _profileService.fetchUserProfile();
+    print("🚀 ProfileScreen initState");
+    _loadProfile();
   }
 
-  void _handleLogout() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Déconnexion"),
-        content: const Text("Voulez-vous vraiment vous déconnecter ?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Annuler"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text(
-              "Déconnexion",
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldLogout == true) {
-      await _profileService.logout();
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (route) => false,
-        );
-      }
-    }
-  }
-
-  void _retryLoadProfile() {
+  void _loadProfile() {
     setState(() {
       _userProfileFuture = _profileService.fetchUserProfile();
     });
   }
 
-  Widget _buildProfileWithData(User user) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // En-tête avec gradient
-          Container(
+  Future<void> _handleLogout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Déconnexion'),
+        content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Déconnexion'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      await UserService.logout();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      body: FutureBuilder<User>(
+        future: _userProfileFuture,
+        builder: (context, snapshot) {
+          // Chargement
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text("Chargement du profil...", style: TextStyle(fontSize: 14)),
+                ],
+              ),
+            );
+          }
+
+          // Erreur
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "Erreur de chargement",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      snapshot.error.toString(),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      textAlign: TextAlign.center,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: _loadProfile,
+                      icon: const Icon(Icons.refresh, size: 20),
+                      label: const Text("Réessayer"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          // Données chargées
+          if (!snapshot.hasData) {
+            return const Center(child: Text("Aucune donnée disponible"));
+          }
+
+          final user = snapshot.data!;
+          return _buildProfileContent(user);
+        },
+      ),
+    );
+  }
+
+  Widget _buildProfileContent(User user) {
+    return CustomScrollView(
+      slivers: [
+        // En-tête avec avatar
+        SliverToBoxAdapter(
+          child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(24, 60, 24, 40),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.green[600]!, Colors.green[700]!],
-              ),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(30),
-                bottomRight: Radius.circular(30),
+                colors: [Colors.green[600]!, Colors.green[800]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.white,
-                  child: Text(
-                    user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  user.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "${user.userTypeLabel} • ${user.location}",
-                  style: TextStyle(color: Colors.green[100], fontSize: 14),
-                ),
-                if (user.isVerified) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+                child: Column(
+                  children: [
+                    // Avatar
+                    Stack(
                       children: [
-                        const Icon(Icons.verified, color: Colors.white, size: 18),
-                        const SizedBox(width: 6),
-                        Text(
-                          "Compte vérifié",
-                          style: TextStyle(
-                            color: Colors.green[100],
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                        Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ],
                           ),
+                          child: CircleAvatar(
+                            radius: 45,
+                            backgroundColor: Colors.white,
+                            child: Icon(
+                              Icons.person,
+                              size: 50,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                        ),
+                        if (user.isVerified)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: Colors.blue,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: const Icon(
+                                Icons.verified,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Nom
+                    Text(
+                      user.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Téléphone
+                    Text(
+                      user.phoneNumber,
+                      style: TextStyle(
+                        color: Colors.green[100],
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Badge rôle
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        user.userTypeLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Rating
+                    if (user.rating > 0)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.star, color: Colors.amber, size: 18),
+                          const SizedBox(width: 4),
+                          Text(
+                            user.rating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // Contenu principal
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Informations personnelles
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Informations',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildInfoRow(
+                          Icons.location_on,
+                          'Localisation',
+                          user.location,
+                        ),
+                        const Divider(height: 20),
+                        _buildInfoRow(
+                          Icons.check_circle,
+                          'Statut',
+                          'Actif',  // ✅ TOUJOURS ACTIF
+                          statusColor: Colors.green,
                         ),
                       ],
                     ),
                   ),
-                ],
-              ],
-            ),
-          ),
-
-          // Stats Container
-          Transform.translate(
-            offset: const Offset(0, -30),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  )
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  StatItem(
-                    label: "Note",
-                    value: user.rating.toStringAsFixed(1),
-                  ),
-                  const SizedBox(height: 30, child: VerticalDivider()),
-                  StatItem(
-                    label: "Statut",
-                    value: user.status == 'active' ? 'Actif' : 'Inactif',
-                  ),
-                  const SizedBox(height: 30, child: VerticalDivider()),
-                  StatItem(
-                    label: "Type",
-                    value: user.userType == 'both' ? '2' : '1',
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Menu
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                // Section Compte
-                _buildSectionTitle("Mon compte"),
-                _buildProfileItem(
-                  context,
-                  Icons.person_outline,
-                  "Informations personnelles",
-                  null,
-                  onTap: () {
-                    // TODO: Implémenter l'édition du profil
-                  },
-                ),
-                _buildProfileItem(
-                  context,
-                  Icons.phone,
-                  "Téléphone",
-                  user.phoneNumber,
-                ),
-                _buildProfileItem(
-                  context,
-                  Icons.location_on_outlined,
-                  "Localisation",
-                  user.location,
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-                // ═══════════════════════════════════════════════════════════
-                // Section Producteur (pour producer, both, admin)
-                // ═══════════════════════════════════════════════════════════
+                // Section Producteur
                 if (user.isProducer) ...[
                   _buildSectionTitle("Espace producteur"),
-
-                  // Mes produits
                   _buildProfileItem(
                     context,
-                    Icons.inventory_2_outlined,
+                    Icons.inventory,
                     "Mes produits",
                     null,
                     onTap: () {
@@ -345,27 +442,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       );
                     },
-                    badge: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'Gérer',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    badgeText: 'Vente',
+                    badgeColor: Colors.green,
                   ),
-
-                  // Historique des ventes
                   _buildProfileItem(
                     context,
-                    Icons.receipt_long,
+                    Icons.sell,
                     "Historique des ventes",
                     null,
                     onTap: () {
@@ -376,35 +458,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       );
                     },
-                    badge: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.purple,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'Ventes',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
                   ),
-
-                  _buildProfileItem(
-                    context,
-                    Icons.bar_chart,
-                    "Statistiques de vente",
-                    null,
-                  ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                 ],
 
-                // ═══════════════════════════════════════════════════════════
-                // Section Acheteur (pour buyer, both, admin)
-                // ═══════════════════════════════════════════════════════════
+                // Section Acheteur
                 if (user.isBuyer) ...[
                   _buildSectionTitle("Espace acheteur"),
                   _buildProfileItem(
@@ -420,47 +478,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       );
                     },
-                    badge: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'Achats',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    badgeText: 'Achat',
+                    badgeColor: Colors.blue,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                 ],
+
+                // Section Aide & Support
+                _buildSectionTitle("Aide & Support"),
+                _buildProfileItem(
+                  context,
+                  Icons.help_outline,
+                  "Aide",
+                  "FAQ et guides",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const HelpScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildProfileItem(
+                  context,
+                  Icons.headset_mic,
+                  "Support & Service Client",
+                  "Contactez-nous",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SupportScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
 
                 // Section Général
                 _buildSectionTitle("Général"),
                 _buildProfileItem(
                   context,
-                  Icons.notifications_outlined,
-                  "Notifications",
-                  null,
+                  Icons.settings,
+                  "Paramètres",
+                  "Gérer votre compte",
+                  onTap: () {
+                    // ✅ NAVIGATION vers SettingsScreen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsScreen(),
+                      ),
+                    );
+                  },
                 ),
                 _buildProfileItem(
                   context,
-                  Icons.help_outline,
-                  "Aide & Support",
-                  null,
-                ),
-                _buildProfileItem(
-                  context,
-                  Icons.info_outline,
-                  "À propos",
-                  "Version 1.0.0",
+                  Icons.privacy_tip_outlined,
+                  "Confidentialité",
+                  "Politique de confidentialité",
+                  onTap: () {
+                    // ✅ NAVIGATION vers PrivacyScreen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PrivacyScreen(),
+                      ),
+                    );
+                  },
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
 
                 // Bouton Déconnexion
                 SizedBox(
@@ -469,42 +558,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: _handleLogout,
                     icon: const Icon(Icons.logout, size: 20),
                     label: const Text(
-                      "Se déconnecter",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      'Déconnexion',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      elevation: 0,
+                      elevation: 2,
                     ),
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          title,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[700],
-          ),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey[700],
         ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value, {Color? statusColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, color: statusColor ?? Colors.green[700], size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: statusColor,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -515,155 +635,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String title,
       String? subtitle, {
         VoidCallback? onTap,
-        Widget? badge,
+        String? badgeText,
+        Color? badgeColor,
       }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.green[50],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: Colors.green[700], size: 22),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 13,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (badge != null) badge,
-                const SizedBox(width: 8),
-                if (onTap != null)
-                  Icon(Icons.chevron_right, color: Colors.grey[400]),
-              ],
-            ),
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 7),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        leading: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: Colors.green[50],
+            shape: BoxShape.circle,
           ),
+          child: Icon(icon, color: Colors.green[700], size: 22),
         ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: FutureBuilder<User>(
-        future: _userProfileFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.green),
-            );
-          } else if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.red[50],
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.error_outline,
-                        color: Colors.red[400],
-                        size: 60,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      "Erreur de chargement",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      snapshot.error.toString().replaceAll('Exception: ', ''),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton.icon(
-                      onPressed: _retryLoadProfile,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text("Réessayer"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green[700],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 16,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: _handleLogout,
-                      child: const Text(
-                        "Se déconnecter",
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ],
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                title,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (badgeText != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: badgeColor ?? Colors.green,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  badgeText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            );
-          } else if (snapshot.hasData) {
-            return _buildProfileWithData(snapshot.data!);
-          } else {
-            return const Center(
-              child: Text("Aucune donnée de profil."),
-            );
-          }
-        },
+            ],
+          ],
+        ),
+        subtitle: subtitle != null
+            ? Text(
+          subtitle,
+          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        )
+            : null,
+        trailing: Icon(Icons.chevron_right, color: Colors.grey[400], size: 20),
+        onTap: onTap,
       ),
     );
   }

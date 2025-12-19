@@ -11,11 +11,12 @@ import '../diagnostic/diagnostic_screen.dart';
 import '../market/market_screen.dart';
 import '../chat/chat_screen.dart';
 import '../profile/profile_screen.dart';
+import '../terms/terms_screen.dart';
 
 // Configuration API - MODIFIER CETTE URL SELON VOTRE CONFIGURATION
 // Pour émulateur Android: 10.0.2.2
 // Pour téléphone physique: votre IP locale (ex: 192.168.1.16)
-const String baseUrl = 'http://10.0.2.2:8001/api';
+const String baseUrl = 'http://192.168.1.161:8001/api';
 
 // =============================================================================
 // ÉCRAN DE CONNEXION (LOGIN)
@@ -249,28 +250,44 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 24),
 
                   // Lien vers l'inscription
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text("Pas encore de compte ?"),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const RegisterScreen(),
-                            ),
-                          );
-                        },
-                        child: Text(
-                          "S'inscrire",
-                          style: TextStyle(
-                            color: Colors.green[700],
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                  // ✅ Lien vers l'inscription - AVEC SAFEAR EA + PADDING
+                  SafeArea(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.of(context).viewInsets.bottom + 8,
+                        left: 16,
+                        right: 16,
                       ),
-                    ],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text("Pas encore de compte ?",
+                              style: TextStyle(fontSize: 11),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const RegisterScreen(),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              "S'inscrire",
+                              style: TextStyle(
+                                color: Colors.green[700],
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -554,7 +571,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
                     maxLength: 1,
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
                       counterText: "",
                       filled: true,
@@ -565,7 +582,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.green[700]!, width: 2),
+                        borderSide: BorderSide(color: Colors.green[700]!, width: 4),
                       ),
                     ),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -626,15 +643,16 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             const SizedBox(height: 24),
 
             // Lien Renvoyer le code
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
               children: [
                 const Text("Vous n'avez pas reçu le code ?"),
                 TextButton(
                   onPressed: _resendCode,
-                  child: Text(
+                   child: Text(
                     "Renvoyer",
                     style: TextStyle(
+                      fontSize: 11,
                       color: Colors.green[700],
                       fontWeight: FontWeight.bold,
                     ),
@@ -949,7 +967,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
 
             const SizedBox(height: 32),
-
+            // Conditions d'utilisation
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                children: [
+                  Text(
+                    'En vous inscrivant, vous acceptez nos ',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TermsScreen(),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'Conditions d\'utilisation',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             // Bouton S'inscrire
             ElevatedButton(
               onPressed: _isLoading ? null : _register,

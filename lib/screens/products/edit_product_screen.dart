@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/user_service.dart';
 
-const String baseUrl = 'http://10.0.2.2:8001/api';
+const String baseUrl = 'http://192.168.1.161:8001/api';
 
 class EditProductScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -368,19 +368,26 @@ class _EditProductScreenState extends State<EditProductScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[300]!),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12),  // ← 16 → 12
       child: DropdownButtonFormField<String>(
         value: value,
+        isExpanded: true,  // ← AJOUTÉ
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon, color: Colors.green[700]),
+          labelStyle: const TextStyle(fontSize: 13),  // ← AJOUTÉ
+          prefixIcon: Icon(icon, color: Colors.green[700], size: 20),  // ← size 20
           border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),  // ← AJOUTÉ
         ),
         dropdownColor: Colors.white,
         items: items.entries.map((entry) {
           return DropdownMenuItem(
             value: entry.key,
-            child: Text(entry.value),
+            child: Text(
+              entry.value,
+              style: const TextStyle(fontSize: 13),  // ← AJOUTÉ
+              overflow: TextOverflow.ellipsis,  // ← AJOUTÉ
+            ),
           );
         }).toList(),
         onChanged: onChanged,

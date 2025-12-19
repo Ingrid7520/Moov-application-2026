@@ -1,3 +1,6 @@
+// lib/screens/chat/chat_screen.dart
+// ✅ FINAL - Sauvegarde AUTOMATIQUE MongoDB + Ticker disposé
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -14,7 +17,11 @@ import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
-import '../../constants/api_constants.dart';
+import '../../services/user_service.dart';
+import 'chat_history_screen.dart';
+
+const String djangoBaseUrl = 'http://192.168.1.161:8000/api';
+const String fastApiBaseUrl = 'http://192.168.1.161:8001/api';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -43,13 +50,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   XFile? _selectedImage;
   String? _recordedAudioPath;
 
-  String _sessionId = 'flutter_default_${DateTime.now().millisecondsSinceEpoch}';
+  String _sessionId = 'flutter_${DateTime.now().millisecondsSinceEpoch}';
+  String? _conversationId;
+  String? _userId;
 
   @override
   void initState() {
     super.initState();
 
-    // Support audio
+    _initUser();
+
     if (kIsWeb) {
       _audioSupported = false;
     } else if (Platform.isAndroid || Platform.isIOS) {
@@ -59,14 +69,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _audioSupported = false;
     }
 
-    // Message de bienvenue
     _messages.add({
-      'text':
-      '👋 Salut ! Je suis ton assistant AgriSmart.\nTu peux m\'envoyer du texte, des photos${_audioSupported ? ' ou des notes vocales 🎤' : ''} !',
+      'text': '👋 Salut ! Je suis ton assistant AgriSmart.\nTu peux m\'envoyer du texte, des photos${_audioSupported ? ' ou des notes vocales 🎤' : ''} !',
       'isBot': true,
     });
 
-    // Animation de bienvenue
     _welcomeController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -93,6 +100,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     });
   }
 
+  Future<void> _initUser() async {
+    try {
+      final userData = await UserService.getUserData();
+      _userId = userData?['id'];
+      print('🔍 UserId chargé: $_userId');
+    } catch (e) {
+      print('❌ Erreur chargement user: $e');
+    }
+  }
+
   @override
   void dispose() {
     if (_audioSupported) _audioRecorder.dispose();
@@ -105,6 +122,78 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool get _hasContent =>
       _controller.text.trim().isNotEmpty || _selectedImage != null || _recordedAudioPath != null;
 
+  // ✅ SAUVEGARDE AUTOMATIQUE MONGODB
+  Future<void> _saveToMongoDB(String userMessage, String botResponse) async {
+    if (_userId == null) {
+      print('⚠️ Pas d\'userId, impossible de sauvegarder');
+      return;
+    }
+
+    try {
+      print('💾 Début sauvegarde MongoDB...');
+
+      // Get or create conversation
+      if (_conversationId == null) {
+        print('📝 Création/récupération conversation...');
+        final response = await http.post(
+          Uri.parse('$fastApiBaseUrl/chat-history/conversations/get-or-create?user_id=$_userId&session_id=$_sessionId'),
+          headers: {'Content-Type': 'application/json'},
+        ).timeout(const Duration(seconds: 10));
+
+        print('📥 Statut conversation: ${response.statusCode}');
+        print('📥 Body: ${response.body}');
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          _conversationId = data['conversation_id'];
+          print('✅ ConversationId: $_conversationId');
+        } else {
+          print('❌ Erreur get_or_create: ${response.statusCode}');
+          return;
+        }
+      }
+
+      if (_conversationId == null) {
+        print('❌ ConversationId null après get_or_create');
+        return;
+      }
+
+      // Save user message
+      print('💬 Sauvegarde message utilisateur...');
+      final userResponse = await http.post(
+        Uri.parse('$fastApiBaseUrl/chat-history/messages'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'conversation_id': _conversationId,
+          'role': 'user',
+          'content': userMessage,
+          'message_type': 'text',
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      print('📥 User message: ${userResponse.statusCode}');
+
+      // Save bot response
+      print('🤖 Sauvegarde réponse bot...');
+      final botResponseSave = await http.post(
+        Uri.parse('$fastApiBaseUrl/chat-history/messages'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'conversation_id': _conversationId,
+          'role': 'assistant',
+          'content': botResponse,
+          'message_type': 'text',
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      print('📥 Bot message: ${botResponseSave.statusCode}');
+
+      print('✅ Messages sauvegardés: $_conversationId');
+    } catch (e) {
+      print('❌ Erreur sauvegarde MongoDB: $e');
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     final imageToSend = _selectedImage;
@@ -112,7 +201,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     if (text.isEmpty && imageToSend == null && audioToSend == null) return;
 
-    // Copier le fichier audio dans un emplacement permanent
     String? permanentAudioPath;
     if (audioToSend != null) {
       try {
@@ -122,8 +210,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         await File(audioToSend).copy(permanentFile.path);
         permanentAudioPath = permanentFile.path;
       } catch (e) {
-        debugPrint('Erreur copie audio: $e');
-        permanentAudioPath = audioToSend; // Fallback
+        print('Erreur copie audio: $e');
+        permanentAudioPath = audioToSend;
       }
     }
 
@@ -144,7 +232,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
 
     try {
-      var uri = Uri.parse('${ApiConstants.baseUrl}${ApiConstants.chatStreamEndpoint}');
+      var uri = Uri.parse('$djangoBaseUrl/chat/stream/');
       var request = http.MultipartRequest('POST', uri);
 
       request.fields['message'] = text;
@@ -171,7 +259,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       if (streamedResponse.statusCode != 200) {
         String msg = '❌ Erreur serveur (${streamedResponse.statusCode})';
         if (streamedResponse.statusCode == 429 || streamedResponse.statusCode == 503) {
-          msg = '⚠️ Limite atteinte ou serveur surchargé.\nRéessaie plus tard.';
+          msg = '⚠️ Limite Gemini atteinte.\nRéessaie dans 60 secondes.';
         }
         _addBotMessage(msg);
         return;
@@ -213,7 +301,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
 
       if (!hasReceivedContent && accumulatedText.isEmpty) {
-        _addBotMessage('❌ Aucune réponse reçue. Le serveur IA est peut-être surchargé.');
+        _addBotMessage('❌ Aucune réponse reçue. Le serveur Gemini est peut-être surchargé.');
+      } else {
+        // ✅ SAUVEGARDE AUTOMATIQUE APRÈS RÉPONSE GEMINI
+        print('🚀 Déclenchement sauvegarde MongoDB...');
+        _saveToMongoDB(text, accumulatedText);
       }
     } on TimeoutException {
       _addBotMessage('⏳ Temps d\'attente dépassé.\nRéessaie dans quelques minutes.');
@@ -244,6 +336,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _newConversation() {
     setState(() {
       _sessionId = 'flutter_${DateTime.now().millisecondsSinceEpoch}';
+      _conversationId = null;
       _messages.clear();
       _messages.add({
         'text': '👋 Nouvelle conversation démarrée !\nComment puis-je t\'aider ?',
@@ -290,12 +383,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         setState(() => _isRecording = true);
       }
     } catch (e) {
-      debugPrint('Erreur démarrage enregistrement: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erreur lors de l\'enregistrement')),
-        );
-      }
+      print('Erreur démarrage enregistrement: $e');
     }
   }
 
@@ -311,12 +399,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         });
       }
     } catch (e) {
-      debugPrint('Erreur arrêt enregistrement: $e');
+      print('Erreur arrêt enregistrement: $e');
       if (mounted) {
         setState(() => _isRecording = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erreur lors de l\'arrêt')),
-        );
       }
     }
   }
@@ -328,7 +413,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         setState(() => _selectedImage = image);
       }
     } catch (e) {
-      debugPrint('Erreur sélection image: $e');
+      print('Erreur sélection image: $e');
     }
   }
 
@@ -339,7 +424,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         setState(() => _selectedImage = image);
       }
     } catch (e) {
-      debugPrint('Erreur prise photo: $e');
+      print('Erreur prise photo: $e');
     }
   }
 
@@ -353,20 +438,38 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         foregroundColor: Colors.white,
         title: const SizedBox.shrink(),
         actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ChatHistoryScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.history, size: 24),
+              tooltip: 'Historique',
+            ),
+          ),
           TextButton.icon(
             onPressed: _newConversation,
             icon: const Icon(Icons.refresh, size: 20),
-            label: const Text('Nouvelle discussion'),
+            label: const Text('Nouvelle'),
             style: TextButton.styleFrom(foregroundColor: Colors.white),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
         ],
       ),
       body: Stack(
         children: [
           Column(
             children: [
-              // === EN-TÊTE STYLE DIAGNOSTICSCREEN ===
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
@@ -388,14 +491,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "Posez-moi toutes vos questions agricoles",
+                      "Propulsé par Google Gemini",
                       style: TextStyle(color: Colors.green[100]),
                     ),
                   ],
                 ),
               ),
 
-              // === LISTE DES MESSAGES ===
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
@@ -416,7 +518,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 ),
               ),
 
-              // === PRÉVISUALISATION IMAGE / AUDIO ===
               if (_selectedImage != null || _recordedAudioPath != null)
                 Container(
                   color: Colors.white,
@@ -475,7 +576,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   ),
                 ),
 
-              // === BARRE D'ENTRÉE ===
               Container(
                 color: Colors.white,
                 padding: EdgeInsets.only(
@@ -512,9 +612,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                               contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                             ),
                             onSubmitted: (_) => _sendMessage(),
-                            onTapOutside: (event) {
-                              // Empêcher l'erreur de widget désactivé
-                            },
+                            onTapOutside: (event) {},
                           ),
                         ),
                       ),
@@ -544,7 +642,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             ],
           ),
 
-          // === ANIMATION DE BIENVENUE ===
           if (_showWelcomeAnimation)
             FadeTransition(
               opacity: _welcomeFadeAnimation,
@@ -584,7 +681,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 }
 
-// === INDICATEUR DE TYPAGE ===
+// ✅ AnimatedTypingIndicator avec dispose() correct
 class AnimatedTypingIndicator extends StatefulWidget {
   const AnimatedTypingIndicator({super.key});
 
@@ -594,16 +691,26 @@ class AnimatedTypingIndicator extends StatefulWidget {
 
 class _AnimatedTypingIndicatorState extends State<AnimatedTypingIndicator> with TickerProviderStateMixin {
   late AnimationController _controller;
+  late AnimationController _lottieController;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(duration: const Duration(milliseconds: 1200), vsync: this)..repeat();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat();
+
+    _lottieController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat();
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _lottieController.dispose();
     super.dispose();
   }
 
@@ -620,7 +727,7 @@ class _AnimatedTypingIndicatorState extends State<AnimatedTypingIndicator> with 
             height: 44,
             child: Lottie.asset(
               'assets/animations/robot_wave.json',
-              controller: AnimationController(duration: const Duration(seconds: 3), vsync: this)..repeat(),
+              controller: _lottieController,
               fit: BoxFit.contain,
             ),
           ),
@@ -661,7 +768,7 @@ class _AnimatedTypingIndicatorState extends State<AnimatedTypingIndicator> with 
   }
 }
 
-// === BULLE DE MESSAGE ===
+// MessageBubble reste identique (trop long pour inclure ici, gardez l'ancien)
 class MessageBubble extends StatefulWidget {
   final String text;
   final bool isBot;
@@ -724,7 +831,7 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
         if (mounted) setState(() => _isPlaying = p);
       });
     } catch (e) {
-      debugPrint("Erreur chargement audio : $e");
+      print("Erreur chargement audio : $e");
     }
   }
 
@@ -736,7 +843,7 @@ class _MessageBubbleState extends State<MessageBubble> with TickerProviderStateM
         await _audioPlayer.play();
       }
     } catch (e) {
-      debugPrint("Erreur lecture audio : $e");
+      print("Erreur lecture audio : $e");
     }
   }
 

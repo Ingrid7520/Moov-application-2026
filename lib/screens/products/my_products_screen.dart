@@ -6,7 +6,7 @@ import '../../services/user_service.dart';
 import 'add_product_screen.dart';
 import 'edit_product_screen.dart';
 
-const String baseUrl = 'http://10.0.2.2:8001/api';
+const String baseUrl = 'http://192.168.1.161:8001/api';
 
 class MyProductsScreen extends StatefulWidget {
   const MyProductsScreen({super.key});

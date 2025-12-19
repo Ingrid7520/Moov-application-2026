@@ -1,21 +1,20 @@
 // lib/screens/home/home_screen.dart
-// ✅ Utilise l'API météo Django existante (port 8000)
+// ✅ FINAL - Ville MongoDB + Navigation weather_detail_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-import 'weather_detail_screen.dart';
+import 'weather_detail_screen.dart';  // ✅ Import screen météo du dépôt
 import '../diagnostic/diagnostic_screen.dart';
 import '../market/market_screen.dart';
 import '../products/my_products_screen.dart';
-import '../marketplace/my_purchases_screen.dart';
+import '../marketplace/marketplace_screen.dart';
 import '../../services/user_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/quick_action_card.dart';
 
-// ✅ API Django sur port 8000
-const String djangoBaseUrl = 'http://10.0.2.2:8000/api';
+const String djangoBaseUrl = 'http://192.168.1.161:8000/api';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -30,6 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool isLoading = true;
   String errorMessage = '';
 
+  String userType = 'buyer';
+
   @override
   void initState() {
     super.initState();
@@ -43,62 +44,133 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      // 1. Charger les données utilisateur
+      // ✅ Charger données utilisateur depuis MongoDB
       userData = await UserService.getUserData();
+      userType = userData?['user_type'] ?? 'buyer';
 
-      // 2. Charger la météo selon la ville de l'utilisateur
+      print('👤 UserData chargé: ${userData?['name']}');
+      print('📍 Location: ${userData?['location']}');
+
       await _fetchWeatherForUserCity();
-
     } catch (e) {
+      print('❌ Erreur chargement: $e');
       setState(() {
         errorMessage = 'Erreur de chargement';
         isLoading = false;
       });
-      print('❌ Erreur: $e');
     }
   }
 
   Future<void> _fetchWeatherForUserCity() async {
     try {
-      // Récupérer la ville de l'utilisateur
-      final city = userData?['location'] ??
-          userData?['region'] ??
-          'Abidjan';
+      // ✅ Utiliser la ville de l'utilisateur depuis MongoDB
+      final city = userData?['location'] ?? userData?['region'] ?? 'Abidjan';
 
-      print('🌤️ Météo demandée pour: $city');
+      print('🌤️ Chargement météo pour: $city');
 
-      // ✅ Appel à l'API météo Django existante
       final response = await http.post(
         Uri.parse('$djangoBaseUrl/weather/city/'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'city': city}),
       ).timeout(const Duration(seconds: 15));
 
-      print('📡 Météo Status: ${response.statusCode}');
+      print('📥 Météo status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = json.decode(utf8.decode(response.bodyBytes));
-
         if (mounted) {
           setState(() {
             weatherData = data;
             isLoading = false;
           });
+          print('✅ Météo chargée pour $city');
         }
-      } else if (response.statusCode == 404) {
-        throw Exception('Ville non trouvée');
       } else {
-        throw Exception('Erreur serveur (${response.statusCode})');
+        throw Exception('Erreur ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ Erreur météo: $e');
       if (mounted) {
         setState(() {
           isLoading = false;
           errorMessage = 'Météo indisponible';
         });
       }
-      print('❌ Erreur météo: $e');
     }
+  }
+
+  List<Widget> _buildQuickActions() {
+    List<Widget> actions = [];
+
+    if (userType == 'buyer' || userType == 'both') {
+      actions.add(
+        QuickActionCard(
+          icon: Icons.shopping_cart,
+          title: "Marketplace",
+          subtitle: "Acheter des produits",
+          color: Colors.orange,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const MarketplaceScreen()),
+          ),
+        ),
+      );
+
+      actions.add(
+        QuickActionCard(
+          icon: Icons.trending_up,
+          title: "Prix marché",
+          subtitle: "Voir les cours",
+          color: Colors.green,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const MarketScreen()),
+          ),
+        ),
+      );
+    }
+
+    if (userType == 'producer' || userType == 'both' || userType == 'admin') {
+      actions.add(
+        QuickActionCard(
+          icon: Icons.camera_alt,
+          title: "Diagnostic",
+          subtitle: "Scanner une plante",
+          color: Colors.blue,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const DiagnosticScreen()),
+          ),
+        ),
+      );
+
+      actions.add(
+        QuickActionCard(
+          icon: Icons.inventory,
+          title: "Mes produits",
+          subtitle: "Gérer l'inventaire",
+          color: Colors.purple,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const MyProductsScreen()),
+          ),
+        ),
+      );
+    }
+
+    if (actions.isEmpty) {
+      actions.add(
+        Container(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Aucune action disponible',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        ),
+      );
+    }
+
+    return actions;
   }
 
   IconData _getWeatherIcon(String? iconCode) {
@@ -116,10 +188,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final current = weatherData?['current'];
-    final locationName = weatherData?['location']?['name'] ??
-        userData?['location'] ??
-        'Votre ville';
-    final userName = userData?['name'] ?? 'Utilisateur';
+    final locationName = weatherData?['location']?['name'] ?? userData?['location'] ?? 'Votre ville';
+    final userName = userData?['name'] ?? 'Emmanuel';
 
     return SafeArea(
       top: false,
@@ -129,7 +199,6 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
-              // === En-tête avec dégradé ===
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
                 decoration: BoxDecoration(
@@ -145,7 +214,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Column(
                   children: [
-                    // En-tête avec nom
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -164,8 +232,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                "Bienvenue sur AgriSmart CI",
-                                style: TextStyle(color: Colors.green[100]),
+                                _getUserTypeLabel(userType),
+                                style: TextStyle(color: Colors.green[100], fontSize: 13),
                               ),
                             ],
                           ),
@@ -182,52 +250,77 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // === Zone Météo CLIQUABLE ===
-                    InkWell(
-                      onTap: () {
-                        if (weatherData != null && !isLoading && errorMessage.isEmpty) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => WeatherDetailScreen(
-                                  weatherData: weatherData!
+                    // ✅ CARTE MÉTÉO CLIQUABLE → Ouvre WeatherDetailScreen du dépôt
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          if (weatherData != null && !isLoading && errorMessage.isEmpty) {
+                            print('🎯 Navigation vers WeatherDetailScreen');
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => WeatherDetailScreen(
+                                  weatherData: weatherData!,  // ✅ Passe weatherData
+                                ),
                               ),
-                            ),
-                          );
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                            );
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Ink(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white.withOpacity(0.2)),
+                          ),
+                          child: isLoading
+                              ? const Center(
+                            child: CircularProgressIndicator(color: Colors.white),
+                          )
+                              : errorMessage.isNotEmpty
+                              ? _buildWeatherError()
+                              : _buildWeatherContent(current, locationName),
                         ),
-                        child: isLoading
-                            ? const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
-                        )
-                            : errorMessage.isNotEmpty
-                            ? _buildWeatherError()
-                            : _buildWeatherContent(current, locationName),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // === Actions rapides ===
               Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Actions rapides",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Actions rapides",
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _getUserTypeColor(userType).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _getUserTypeColor(userType)),
+                          ),
+                          child: Text(
+                            _getUserTypeLabel(userType),
+                            style: TextStyle(
+                              color: _getUserTypeColor(userType),
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
+
                     GridView.count(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -235,86 +328,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
                       childAspectRatio: 0.95,
-                      children: [
-                        // Diagnostic
-                        QuickActionCard(
-                          icon: Icons.camera_alt,
-                          title: "Diagnostic",
-                          subtitle: "Scanner une plante",
-                          color: Colors.blue,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const DiagnosticScreen(),
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Prix marché
-                        QuickActionCard(
-                          icon: Icons.trending_up,
-                          title: "Prix marché",
-                          subtitle: "Voir les cours",
-                          color: Colors.green,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const MarketScreen(),
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Mes produits
-                        QuickActionCard(
-                          icon: Icons.inventory,
-                          title: "Mes produits",
-                          subtitle: "Gérer l'inventaire",
-                          color: Colors.purple,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const MyProductsScreen(),
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Transactions
-                        QuickActionCard(
-                          icon: Icons.attach_money,
-                          title: "Mes achats",
-                          subtitle: "Historique",
-                          color: Colors.orange,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const MyPurchasesScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
+                      children: _buildQuickActions(),
                     ),
                   ],
                 ),
               ),
 
-              // === Statistiques de la semaine ===
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Cette semaine",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
+                    const Text("Cette semaine", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.symmetric(vertical: 24),
@@ -345,6 +370,36 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _getUserTypeLabel(String type) {
+    switch (type) {
+      case 'producer':
+        return 'Producteur';
+      case 'buyer':
+        return 'Acheteur';
+      case 'both':
+        return 'Producteur & Acheteur';
+      case 'admin':
+        return 'Administrateur';
+      default:
+        return 'Utilisateur';
+    }
+  }
+
+  Color _getUserTypeColor(String type) {
+    switch (type) {
+      case 'producer':
+        return Colors.purple;
+      case 'buyer':
+        return Colors.orange;
+      case 'both':
+        return Colors.blue;
+      case 'admin':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
   Widget _buildWeatherContent(dynamic current, String locationName) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -352,11 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: Row(
             children: [
-              Icon(
-                _getWeatherIcon(current?['icon']),
-                color: Colors.white,
-                size: 45,
-              ),
+              Icon(_getWeatherIcon(current?['icon']), color: Colors.white, size: 45),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -366,11 +417,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         "${current?['temperature'] ?? '--'}°C",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
                       ),
                     ),
                     Text(
@@ -389,17 +436,10 @@ class _HomeScreenState extends State<HomeScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const Text(
-              "Humidité",
-              style: TextStyle(color: Colors.white, fontSize: 12),
-            ),
+            const Text("Humidité", style: TextStyle(color: Colors.white, fontSize: 12)),
             Text(
               "${current?['humidity'] ?? '--'}%",
-              style: TextStyle(
-                color: Colors.green[100],
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: Colors.green[100], fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -412,19 +452,10 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         const Icon(Icons.cloud_off, color: Colors.white, size: 30),
         const SizedBox(height: 4),
-        const Text(
-          "Météo indisponible",
-          style: TextStyle(color: Colors.white),
-        ),
+        const Text("Météo indisponible", style: TextStyle(color: Colors.white)),
         TextButton(
           onPressed: _loadUserAndWeather,
-          child: const Text(
-            "Réessayer",
-            style: TextStyle(
-              color: Colors.white,
-              decoration: TextDecoration.underline,
-            ),
-          ),
+          child: const Text("Réessayer", style: TextStyle(color: Colors.white, decoration: TextDecoration.underline)),
         ),
       ],
     );

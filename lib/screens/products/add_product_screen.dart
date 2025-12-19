@@ -1,10 +1,12 @@
 // lib/screens/products/add_product_screen.dart
+// ✅ VERSION AVEC UPLOAD IMAGES
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/user_service.dart';
+import '../../widgets/image_picker_widget.dart';
 
-const String baseUrl = 'http://10.0.2.2:8001/api';
+const String baseUrl = 'http://192.168.1.161:8001/api';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -23,6 +25,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   String _selectedType = 'cocoa';
   String _selectedQuality = 'B';
+  List<String> _selectedImages = []; // ✅ NOUVEAU
   bool _isLoading = false;
 
   final Map<String, String> _productTypes = {
@@ -80,9 +83,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
         'description': _descriptionController.text.trim(),
         'quality_grade': _selectedQuality,
         'harvest_date': DateTime.now().toIso8601String(),
+        'images': _selectedImages, // ✅ NOUVEAU: Envoyer images base64
       };
 
-      print('📤 Envoi produit: $productData');
+      print('📤 Envoi produit avec ${_selectedImages.length} image(s)');
 
       final response = await http.post(
         Uri.parse('$baseUrl/products'),
@@ -94,7 +98,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       );
 
       print('📥 Status: ${response.statusCode}');
-      print('📥 Response: ${response.body}');
 
       if (response.statusCode == 201) {
         if (mounted) {
@@ -104,7 +107,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          Navigator.pop(context, true); // Retourner true pour recharger la liste
+          Navigator.pop(context, true);
         }
       } else {
         final error = json.decode(response.body);
@@ -143,6 +146,22 @@ class _AddProductScreenState extends State<AddProductScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            // ✅ WIDGET SÉLECTION IMAGES
+            ImagePickerWidget(
+              initialImages: _selectedImages,
+              onImagesChanged: (images) {
+                setState(() {
+                  _selectedImages = images;
+                });
+                print('📸 ${images.length} image(s) sélectionnée(s)');
+              },
+              maxImages: 5,
+            ),
+
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+
             // Nom du produit
             _buildTextField(
               controller: _nameController,
@@ -175,7 +194,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
             const SizedBox(height: 16),
 
-            // Quantité et Prix (côte à côte)
+            // Quantité et Prix
             Row(
               children: [
                 Expanded(
@@ -318,7 +337,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Vos produits seront visibles par tous les acheteurs sur la plateforme.',
+                      'Ajoutez des photos pour attirer plus d\'acheteurs. Max 5 photos, 5MB chacune.',
                       style: TextStyle(
                         color: Colors.blue[700],
                         fontSize: 13,
@@ -376,9 +395,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[300]!),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: DropdownButtonFormField<String>(
         value: value,
+        isExpanded: true,
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon, color: Colors.green[700]),

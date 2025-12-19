@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
@@ -15,7 +16,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
   bool showResult = false;
   bool isLoading = false;
   File? selectedImage;
-  
+
   // Résultats du diagnostic
   String? diseaseName;
   String? plantName;
@@ -25,7 +26,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
   String? errorMessage;
 
   final ImagePicker _picker = ImagePicker();
-  final String apiUrl = 'http://10.0.2.2:8000/api/chat/';
+  final String apiUrl = 'http://192.168.1.161:8000/api/chat/';
 
   @override
   Widget build(BuildContext context) {
@@ -56,11 +57,11 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
-              child: isLoading 
+              child: isLoading
                   ? _buildLoadingView()
-                  : showResult 
-                      ? _buildResultView() 
-                      : _buildCaptureView(),
+                  : showResult
+                  ? _buildResultView()
+                  : _buildCaptureView(),
             ),
           ),
         ],
@@ -127,27 +128,32 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: () => _pickImage(ImageSource.camera),
-                      icon: const Icon(Icons.camera_alt),
-                      label: const Text("Caméra"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue[600],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        shape: const StadiumBorder(),
+                    Expanded(
+                      child : ElevatedButton.icon(
+                        onPressed: () => _pickImage(ImageSource.camera),
+                        icon: const Icon(Icons.camera_alt),
+                        label: const Text("Caméra",
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: const StadiumBorder(),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: () => _pickImage(ImageSource.gallery),
-                      icon: const Icon(Icons.photo_library),
-                      label: const Text("Galerie"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue[600],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        shape: const StadiumBorder(),
+                    Expanded(
+                      child :ElevatedButton.icon(
+                        onPressed: () => _pickImage(ImageSource.gallery),
+                        icon: const Icon(Icons.photo_library),
+                        label: const Text("Galerie"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: const StadiumBorder(),
+                        ),
                       ),
                     ),
                   ],
@@ -190,12 +196,12 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
 
   Widget _buildResultView() {
     final bool hasDisease = diseaseName != null && diseaseName!.toLowerCase() != "aucune maladie détectée";
-    
+
     // Définir les couleurs selon la sévérité
     List<Color> gradientColors;
     Color chipColor;
     Color chipBgColor;
-    
+
     if (hasDisease) {
       if (severity == "Sévère") {
         gradientColors = [Colors.red[400]!, Colors.red[600]!];
@@ -241,19 +247,19 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      hasDisease ? Icons.warning : Icons.check_circle, 
-                      color: Colors.white, 
-                      size: 50
+                        hasDisease ? Icons.warning : Icons.check_circle,
+                        color: Colors.white,
+                        size: 50
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      hasDisease ? "Maladie détectée" : "Plant sain",
-                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
+                        hasDisease ? "Maladie détectée" : "Plant sain",
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
                     ),
                     if (plantName != null)
                       Text(
-                        plantName!,
-                        style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14)
+                          plantName!,
+                          style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14)
                       ),
                   ],
                 ),
@@ -268,15 +274,15 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            diseaseName ?? "Résultat",
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
+                              diseaseName ?? "Résultat",
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
                           ),
                         ),
                         if (severity != null)
                           Chip(
                             label: Text(
-                              severity!, 
-                              style: TextStyle(color: chipColor)
+                                severity!,
+                                style: TextStyle(color: chipColor)
                             ),
                             backgroundColor: chipBgColor,
                           )
@@ -284,8 +290,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      description ?? "Aucune description disponible",
-                      style: const TextStyle(color: Colors.grey)
+                        description ?? "Aucune description disponible",
+                        style: const TextStyle(color: Colors.grey)
                     ),
                     if (treatments.isNotEmpty) ...[
                       const SizedBox(height: 16),
@@ -299,8 +305,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              "Traitement recommandé",
-                              style: TextStyle(fontWeight: FontWeight.bold)
+                                "Traitement recommandé",
+                                style: TextStyle(fontWeight: FontWeight.bold)
                             ),
                             const SizedBox(height: 8),
                             ...treatments.map((treatment) => _buildTreatmentStep(treatment)),
@@ -312,19 +318,38 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton(
+                        child: ElevatedButton.icon(
                           onPressed: () {
-                            // TODO: Implémenter la commande d'intrants
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Fonctionnalité à venir"))
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, color: Colors.white),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Cette fonctionnalité sera disponible prochainement. '
+                                            'Un expert agricole vous contactera.',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: Colors.green[700],
+                                behavior: SnackBarBehavior.floating,
+                                duration: Duration(seconds: 4),
+                              ),
                             );
                           },
+                          icon: Icon(Icons.support_agent),
+                          label: Text("Contacter Expert"),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue[600],
+                            backgroundColor: Colors.green[700],
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
-                          child: const Text("Commander intrants"),
                         ),
                       ),
                     ],
@@ -390,8 +415,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
       child: Row(
         children: [
           CircleAvatar(
-            backgroundColor: Colors.blue[100], 
-            child: const Icon(Icons.camera_alt, color: Colors.blue, size: 20)
+              backgroundColor: Colors.blue[100],
+              child: const Icon(Icons.camera_alt, color: Colors.blue, size: 20)
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -434,7 +459,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
         maxHeight: 1080,
         imageQuality: 85,
       );
-      
+
       if (image != null) {
         setState(() {
           selectedImage = File(image.path);
@@ -442,7 +467,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur lors de la sélection: $e"))
+          SnackBar(content: Text("Erreur lors de la sélection: $e"))
       );
     }
   }
@@ -479,7 +504,7 @@ Si aucune maladie n'est détectée, mets disease_name à "Aucune maladie détect
         'POST',
         Uri.parse(apiUrl),
       );
-      
+
       request.headers['Content-Type'] = 'application/json';
       request.body = json.encode({
         'message': prompt,
@@ -493,10 +518,10 @@ Si aucune maladie n'est détectée, mets disease_name à "Aucune maladie détect
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final String responseText = data['response'];
-        
+
         // Parser la réponse JSON de Gemini
         _parseGeminiResponse(responseText);
-        
+
         setState(() {
           showResult = true;
         });
@@ -531,7 +556,7 @@ Si aucune maladie n'est détectée, mets disease_name à "Aucune maladie détect
       cleanedResponse = cleanedResponse.trim();
 
       final data = json.decode(cleanedResponse);
-      
+
       setState(() {
         plantName = data['plant_name'];
         diseaseName = data['disease_name'];

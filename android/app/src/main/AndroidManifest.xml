@@ -5,12 +5,14 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/> <!-- Recommandé Android 13+ -->
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/> <!-- Android 14 optionnel -->
 
     <application
-        android:label="moov_application_2026"
+        android:label="AgriSmart CI"
         android:name="${applicationName}"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">

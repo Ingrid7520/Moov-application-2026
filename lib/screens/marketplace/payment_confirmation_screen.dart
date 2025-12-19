@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import '../../services/user_service.dart';
 
-const String baseUrl = 'http://10.0.2.2:8001/api';
+const String baseUrl = 'http://192.168.1.161:8001/api';
 
 class PaymentConfirmationScreen extends StatefulWidget {
   final String transactionId;
-  final String otpCode; // Pour affichage en mode dev (optionnel)
+  final String otpCode;
   final double amount;
   final String productName;
   final double quantity;
@@ -34,15 +35,8 @@ class PaymentConfirmationScreen extends StatefulWidget {
 class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
   final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  final List<bool> _obscureFields = List.generate(6, (_) => false); // ← Contrôle masquage par champ
   bool _isProcessing = false;
-  bool _showOtpHint = true; // Afficher l'indice OTP
-
-  @override
-  void initState() {
-    super.initState();
-    // ← SUPPRIMÉ: Pas de pré-remplissage automatique
-    // L'utilisateur doit saisir manuellement
-  }
 
   @override
   void dispose() {
@@ -57,9 +51,26 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
 
   String get _otpCode => _controllers.map((c) => c.text).join();
 
+  // ✅ Masquer le chiffre après 500ms
+  void _scheduleObscure(int index) {
+    Timer(const Duration(milliseconds: 500), () {
+      if (mounted && _controllers[index].text.isNotEmpty) {
+        setState(() {
+          _obscureFields[index] = true;
+        });
+      }
+    });
+  }
+
+  Future<void> _checkAutoVerify() async {
+    if (_otpCode.length == 6) {
+      await _confirmPayment();
+    }
+  }
+
   Future<void> _confirmPayment() async {
     if (_otpCode.length != 6) {
-      _showError("Veuillez entrer les 6 chiffres du code OTP");
+      _showError("Veuillez entrer les 6 chiffres du code secret");
       return;
     }
 
@@ -87,7 +98,6 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
         final data = json.decode(utf8.decode(response.bodyBytes));
 
         if (data['status'] == 'success') {
-          // Afficher le succès
           if (mounted) {
             await _showSuccessDialog(data);
           }
@@ -100,7 +110,7 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
       }
     } catch (e) {
       print('❌ Erreur: $e');
-      _showError('Code OTP invalide. Veuillez réessayer.');
+      _showError('Code secret invalide. Veuillez réessayer.');
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -196,8 +206,8 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                Navigator.pop(context); // Fermer le dialog
-                Navigator.pop(context, true); // Retourner au produit avec succès
+                Navigator.pop(context);
+                Navigator.pop(context, true);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green[700],
@@ -297,43 +307,33 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
             const SizedBox(height: 32),
 
             const Text(
-              'Entrez le code OTP',
+              'Entrez votre code secret',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
 
-            const SizedBox(height: 12),
-
-            const Text(
-              'Un code à 6 chiffres a été envoyé à votre téléphone',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 15,
-              ),
-            ),
-
             const SizedBox(height: 40),
 
-            // ← Champs OTP avec masquage (affichage en étoiles)
+            // Champs OTP avec masquage progressif
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: List.generate(6, (index) {
                 return SizedBox(
-                  width: 45,
+                  width: 50,
                   child: TextField(
                     controller: _controllers[index],
                     focusNode: _focusNodes[index],
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
                     maxLength: 1,
-                    obscureText: true, // ← MASQUAGE EN ÉTOILES
-                    obscuringCharacter: '●', // ← Caractère de masquage
+                    obscureText: _obscureFields[index],  // ← Masquage contrôlé
+                    obscuringCharacter: '●',
                     style: const TextStyle(
-                      fontSize: 24,
+                      fontSize: 28,
                       fontWeight: FontWeight.bold,
+                      color: Colors.black,
                     ),
                     decoration: InputDecoration(
                       counterText: "",
@@ -350,16 +350,26 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
                           width: 2,
                         ),
                       ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     onChanged: (value) {
                       if (value.isNotEmpty) {
+                        // ✅ Masquer après 500ms
+                        _scheduleObscure(index);
+
                         if (index < 5) {
                           _focusNodes[index + 1].requestFocus();
                         } else {
                           _focusNodes[index].unfocus();
+                          _checkAutoVerify();
                         }
                       } else {
+                        // Rendre visible si supprimé
+                        setState(() {
+                          _obscureFields[index] = false;
+                        });
+
                         if (index > 0) {
                           _focusNodes[index - 1].requestFocus();
                         }
@@ -431,40 +441,6 @@ class _PaymentConfirmationScreenState extends State<PaymentConfirmationScreen> {
             ),
 
             const SizedBox(height: 24),
-
-            // ← Indice OTP (mode développement)
-            if (_showOtpHint && widget.otpCode.isNotEmpty) ...[
-              GestureDetector(
-                onTap: () {
-                  setState(() => _showOtpHint = false);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Mode dev : Code OTP = ${widget.otpCode} (Appuyez pour masquer)',
-                          style: TextStyle(
-                            color: Colors.blue[700],
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 16),
 
             // Info blockchain
             Container(

@@ -1,72 +1,114 @@
 // lib/services/user_service.dart
+// ✅ COMPLET - Toutes les méthodes + getUserId() ajoutée
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-/// Service pour gérer les données utilisateur stockées localement
 class UserService {
-  static const _storage = FlutterSecureStorage();
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+  static const String baseUrl = 'http://192.168.1.161:8001/api';
 
-  // Clés de stockage
-  static const String _keyToken = 'jwt_token';
-  static const String _keyUserData = 'user_data';
+  // ✅ Vérifier si l'utilisateur est connecté
+  static Future<bool> isLoggedIn() async {
+    final token = await getToken();
+    return token != null;
+  }
 
-  /// Sauvegarder le token JWT
+  // Sauvegarder le token
   static Future<void> saveToken(String token) async {
-    await _storage.write(key: _keyToken, value: token);
+    await _storage.write(key: 'auth_token', value: token);
+    print('✅ Token sauvegardé');
   }
 
-  /// Récupérer le token JWT
+  // Récupérer le token
   static Future<String?> getToken() async {
-    return await _storage.read(key: _keyToken);
+    return await _storage.read(key: 'auth_token');
   }
 
-  /// Sauvegarder les données utilisateur complètes
+  // ✅ NOUVELLE MÉTHODE - Récupérer uniquement l'ID utilisateur
+  static Future<String?> getUserId() async {
+    final userId = await _storage.read(key: 'user_id');
+    print('🔍 UserId récupéré: $userId');
+    return userId;
+  }
+
+  // Sauvegarder les données utilisateur
   static Future<void> saveUserData(Map<String, dynamic> userData) async {
-    final userJson = json.encode(userData);
-    await _storage.write(key: _keyUserData, value: userJson);
+    // ✅ CORRECTION : Utiliser _id depuis MongoDB
+    final userId = userData['_id'] ?? userData['id'];
+
+    await _storage.write(key: 'user_id', value: userId);
+    await _storage.write(key: 'user_name', value: userData['name']);
+    await _storage.write(key: 'user_phone', value: userData['phone_number']);
+    await _storage.write(key: 'user_type', value: userData['user_type']);
+    await _storage.write(key: 'user_location', value: userData['location']);
+
+    print('✅ UserData sauvegardé avec ID: $userId');
   }
 
-  /// Récupérer les données utilisateur
+  // ✅ Récupérer les données utilisateur avec l'ID correct
   static Future<Map<String, dynamic>?> getUserData() async {
     try {
-      final userJson = await _storage.read(key: _keyUserData);
-      if (userJson != null) {
-        return json.decode(userJson);
+      final userId = await _storage.read(key: 'user_id');
+      final name = await _storage.read(key: 'user_name');
+      final phone = await _storage.read(key: 'user_phone');
+      final userType = await _storage.read(key: 'user_type');
+      final location = await _storage.read(key: 'user_location');
+
+      if (userId == null) {
+        print('❌ UserId null dans secure storage');
+        return null;
       }
-      return null;
+
+      print('✅ UserData récupéré - ID: $userId, Name: $name');
+
+      return {
+        '_id': userId,  // ✅ ID MongoDB (format backend)
+        'id': userId,   // ✅ Aussi disponible comme 'id'
+        'name': name,
+        'phone_number': phone,
+        'user_type': userType,
+        'location': location,
+      };
     } catch (e) {
-      print("Erreur lors de la récupération des données utilisateur: $e");
+      print('❌ Erreur getUserData: $e');
       return null;
     }
   }
 
-  /// Récupérer le type d'utilisateur (producer, buyer, both, admin)
-  static Future<String?> getUserType() async {
-    final userData = await getUserData();
-    return userData?['user_type'];
+  // Récupérer le profil depuis l'API
+  static Future<Map<String, dynamic>?> fetchProfile() async {
+    try {
+      final token = await getToken();
+      if (token == null) return null;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/profile'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+
+        // ✅ Sauvegarder avec _id MongoDB
+        await saveUserData(data);
+
+        return data;
+      }
+      return null;
+    } catch (e) {
+      print('❌ Erreur fetchProfile: $e');
+      return null;
+    }
   }
 
-  /// Vérifier si l'utilisateur est producteur
-  static Future<bool> isProducer() async {
-    final userType = await getUserType();
-    return userType == 'producer' || userType == 'both' || userType == 'admin';
-  }
-
-  /// Vérifier si l'utilisateur est acheteur
-  static Future<bool> isBuyer() async {
-    final userType = await getUserType();
-    return userType == 'buyer' || userType == 'both' || userType == 'admin';
-  }
-
-  /// Déconnecter l'utilisateur (supprimer toutes les données)
+  // Déconnexion
   static Future<void> logout() async {
-    await _storage.delete(key: _keyToken);
-    await _storage.delete(key: _keyUserData);
-  }
-
-  /// Vérifier si l'utilisateur est connecté
-  static Future<bool> isLoggedIn() async {
-    final token = await getToken();
-    return token != null && token.isNotEmpty;
+    await _storage.deleteAll();
+    print('✅ Déconnexion réussie');
   }
 }

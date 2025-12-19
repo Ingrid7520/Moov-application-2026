@@ -1,11 +1,13 @@
 // lib/screens/marketplace/product_detail_screen.dart
+// ✅ VERSION AVEC AFFICHAGE IMAGES
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../../services/user_service.dart';
 import 'payment_confirmation_screen.dart';
+import '../../services/user_service.dart';
+import '../../widgets/product_image_carousel.dart'; // ✅ NOUVEAU
 
-const String baseUrl = 'http://10.0.2.2:8001/api';
+const String baseUrl = 'http://192.168.1.161:8001/api';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -32,42 +34,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   double get _totalPrice => _quantity * widget.product['unit_price'];
 
   Future<void> _initiatePayment() async {
-    if (_quantity <= 0) {
-      _showError("La quantité doit être supérieure à 0");
-      return;
-    }
-
-    if (_quantity > widget.product['quantity']) {
-      _showError("Stock insuffisant. Disponible: ${widget.product['quantity']} kg");
-      return;
-    }
-
     setState(() => _isProcessing = true);
 
     try {
       final token = await UserService.getToken();
-      final userData = await UserService.getUserData();
+      final userId = await UserService.getUserId();
 
-      if (token == null || userData == null) {
-        throw Exception('Non authentifié');
+      if (token == null || userId == null) {
+        throw Exception('Authentification requise');
       }
 
-      final buyerPhone = userData['phone_number'] ?? '+225 0000000000';
+      final userData = await UserService.getUserData();
 
       final paymentData = {
-        'buyer_phone': buyerPhone,
-        'amount': _totalPrice,
         'product_id': widget.product['id'],
-        'buyer_id': userData['_id'],
+        'buyer_id': userId,
         'seller_id': widget.product['owner_id'],
         'quantity': _quantity,
         'unit_price': widget.product['unit_price'],
+        'amount': _totalPrice,
+        'buyer_phone': userData?['phone_number'] ?? '+225 0000000000',
+        'delivery_location': _deliveryLocation ?? widget.product['location'],
+        'delivery_date': (_deliveryDate ?? DateTime.now().add(const Duration(days: 3)))
+            .toIso8601String(),
         'description': 'Achat de ${widget.product['name']}',
-        'delivery_date': _deliveryDate?.toIso8601String(),
-        'delivery_location': _deliveryLocation,
       };
 
-      print('💳 Initiation du paiement: $paymentData');
+      print('💳 Initiation paiement...');
 
       final response = await http.post(
         Uri.parse('$baseUrl/payment/initiate'),
@@ -79,23 +72,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       );
 
       print('📥 Status: ${response.statusCode}');
-      print('📥 Response: ${response.body}');
 
-      if (response.statusCode == 200) {
-        final data = json.decode(utf8.decode(response.bodyBytes));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
 
-        if (data['status'] == 'success' && mounted) {
-          // ← CORRECTION: Récupérer otp_code avec vérification null
-          final otpCode = data['otp_code'] ?? '123456'; // Code par défaut si null
+        final transactionId = data['transaction_id'];
+        final otpCode = data['otp_code'] ?? '123456';
 
-          print('🔢 OTP Code reçu: $otpCode');
+        print('✅ Paiement initié - Transaction: $transactionId');
 
+        if (mounted) {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => PaymentConfirmationScreen(
-                transactionId: data['transaction_id'],
-                otpCode: otpCode, // ← Utilise le code récupéré ou par défaut
+                transactionId: transactionId,
+                otpCode: otpCode,
                 amount: _totalPrice,
                 productName: widget.product['name'],
                 quantity: _quantity,
@@ -108,17 +100,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               Navigator.pop(context, true);
             }
           });
-        } else {
-          throw Exception(data['message'] ?? 'Erreur inconnue');
         }
       } else {
-        final error = json.decode(response.body);
-        throw Exception(error['detail'] ?? 'Erreur lors du paiement');
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['detail'] ?? 'Erreur');
       }
     } catch (e) {
       print('❌ Erreur: $e');
       if (mounted) {
-        _showError('Erreur: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -148,18 +143,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final maxQuantity = widget.product['quantity'].toDouble();
+    // ✅ RÉCUPÉRER LES IMAGES DU PRODUIT
+    final List<String> productImages = (widget.product['images'] as List<dynamic>?)
+        ?.map((img) => img.toString())
+        .toList() ?? [];
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -186,28 +176,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Image du produit
-                  Container(
-                    height: 250,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.green[300]!, Colors.green[600]!],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(30),
-                        bottomRight: Radius.circular(30),
-                      ),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        _getProductIcon(widget.product['product_type']),
-                        size: 100,
-                        color: Colors.white,
-                      ),
-                    ),
+                  // ✅ CARROUSEL D'IMAGES AU LIEU DU PLACEHOLDER
+                  ProductImageCarousel(
+                    images: productImages,
+                    productType: widget.product['product_type'],
                   ),
 
                   Padding(
@@ -540,23 +512,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         ],
       ),
     );
-  }
-
-  IconData _getProductIcon(String? type) {
-    switch (type) {
-      case 'cocoa':
-        return Icons.coffee;
-      case 'cashew':
-        return Icons.grain;
-      case 'cassava':
-        return Icons.spa;
-      case 'vegetable':
-        return Icons.eco;
-      case 'fruit':
-        return Icons.apple;
-      default:
-        return Icons.inventory_2;
-    }
   }
 
   String _getQualityLabel(String? grade) {

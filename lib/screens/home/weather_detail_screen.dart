@@ -87,61 +87,61 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
   }
 
   List<Color> getWeatherGradient(String? iconCode) {
-  if (iconCode == null) {
-    return [Colors.blue[400]!, Colors.blue[700]!];
-  }
-
-  final bool isNight = iconCode.endsWith('n');
-
-  // Clair ciel (01d/01n)
-  if (iconCode.startsWith('01')) {
-    if (isNight) {
-      return [const Color(0xFF1E3A8A), const Color(0xFF0F172A)]; // Bleu nuit étoilé
+    if (iconCode == null) {
+      return [Colors.blue[400]!, Colors.blue[700]!];
     }
-    return [const Color(0xFF87CEEB), const Color(0xFF00BFFF)]; // Ciel bleu clair → soleil visible
-  }
 
-  // Quelques nuages (02d/02n)
-  if (iconCode.startsWith('02')) {
-    if (isNight) {
-      return [const Color(0xFF374151), const Color(0xFF1F2937)];
+    final bool isNight = iconCode.endsWith('n');
+
+    // Clair ciel (01d/01n)
+    if (iconCode.startsWith('01')) {
+      if (isNight) {
+        return [const Color(0xFF1E3A8A), const Color(0xFF0F172A)]; // Bleu nuit étoilé
+      }
+      return [const Color(0xFF87CEEB), const Color(0xFF00BFFF)]; // Ciel bleu clair → soleil visible
     }
-    return [const Color(0xFFAED6F1), const Color(0xFF5DADE2)]; // Bleu clair avec nuages
-  }
 
-  // Nuages dispersés/scattered (03d/03n) ou couverts (04d/04n)
-  if (iconCode.startsWith('03') || iconCode.startsWith('04')) {
-    return [const Color(0xFFB0BEC5), const Color(0xFF78909C)]; // Gris clair → bon contraste pour tous emojis
-  }
-
-  // Pluie légère/drizzle (09d/09n) ou pluie (10d/10n)
-  if (iconCode.startsWith('09') || iconCode.startsWith('10')) {
-    if (isNight) {
-      return [const Color(0xFF455A64), const Color(0xFF263238)];
+    // Quelques nuages (02d/02n)
+    if (iconCode.startsWith('02')) {
+      if (isNight) {
+        return [const Color(0xFF374151), const Color(0xFF1F2937)];
+      }
+      return [const Color(0xFFAED6F1), const Color(0xFF5DADE2)]; // Bleu clair avec nuages
     }
-    return [const Color(0xFF90A4AE), const Color(0xFF607D8B)]; // Gris-bleu moyen → pluie visible sans être trop sombre
-  }
 
-  // Orage (11d/11n)
-  if (iconCode.startsWith('11')) {
-    return [const Color(0xFF37474F), const Color(0xFF102027)]; // Gris très sombre avec touche bleue → éclair ⚡ pop
-  }
+    // Nuages dispersés/scattered (03d/03n) ou couverts (04d/04n)
+    if (iconCode.startsWith('03') || iconCode.startsWith('04')) {
+      return [const Color(0xFFB0BEC5), const Color(0xFF78909C)]; // Gris clair → bon contraste pour tous emojis
+    }
 
-  // Neige (13d/13n)
-  if (iconCode.startsWith('13')) {
-    return [const Color(0xFFE3F2FD), const Color(0xFFBBDEFB)]; // Bleu très clair → flocons ❄️ bien visibles
-  }
+    // Pluie légère/drizzle (09d/09n) ou pluie (10d/10n)
+    if (iconCode.startsWith('09') || iconCode.startsWith('10')) {
+      if (isNight) {
+        return [const Color(0xFF455A64), const Color(0xFF263238)];
+      }
+      return [const Color(0xFF90A4AE), const Color(0xFF607D8B)]; // Gris-bleu moyen → pluie visible sans être trop sombre
+    }
 
-  // Brume/brouillard (50d/50n)
-  if (iconCode.startsWith('50')) {
-    return [const Color(0xFFCFD8DC), const Color(0xFF90A4AE)]; // Gris clair brumeux
-  }
+    // Orage (11d/11n)
+    if (iconCode.startsWith('11')) {
+      return [const Color(0xFF37474F), const Color(0xFF102027)]; // Gris très sombre avec touche bleue → éclair ⚡ pop
+    }
 
-  // Par défaut (ex: autres codes rares)
-  return isNight
-      ? [const Color(0xFF1E3A8A), const Color(0xFF0F172A)]
-      : [const Color(0xFF87CEEB), const Color(0xFF00BFFF)];
-}
+    // Neige (13d/13n)
+    if (iconCode.startsWith('13')) {
+      return [const Color(0xFFE3F2FD), const Color(0xFFBBDEFB)]; // Bleu très clair → flocons ❄️ bien visibles
+    }
+
+    // Brume/brouillard (50d/50n)
+    if (iconCode.startsWith('50')) {
+      return [const Color(0xFFCFD8DC), const Color(0xFF90A4AE)]; // Gris clair brumeux
+    }
+
+    // Par défaut (ex: autres codes rares)
+    return isNight
+        ? [const Color(0xFF1E3A8A), const Color(0xFF0F172A)]
+        : [const Color(0xFF87CEEB), const Color(0xFF00BFFF)];
+  }
 
   Color getAlertColor(String severity) {
     switch (severity) {
@@ -236,12 +236,16 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
                             children: [
                               const Icon(Icons.location_on, color: Colors.white, size: 20),
                               const SizedBox(width: 4),
-                              Text(
-                                location['name'],
-                                style: const TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w300,
-                                  color: Colors.white,
+                              Flexible(
+                                child: Text(
+                                  location['name'],
+                                  style: const TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w300,
+                                    color: Colors.white,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
                                 ),
                               ),
                             ],
@@ -270,6 +274,9 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
                               color: Colors.white,
                               fontWeight: FontWeight.w400,
                             ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -331,32 +338,85 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
                           color: Colors.white.withOpacity(0.2),
                         ),
                       ),
-                      child: Column(
-                        children: [
-                          Row(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final cardWidth = (constraints.maxWidth - 12) / 2;
+
+                          return Column(
                             children: [
-                              Expanded(child: _buildDetailTile("Ressenti", "${current['feels_like']}°", Icons.thermostat)),
-                              const SizedBox(width: 12),
-                              Expanded(child: _buildDetailTile("Humidité", "${current['humidity']}%", Icons.water_drop)),
+                              // Ligne 1
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: cardWidth,
+                                    child: _buildDetailTile(
+                                      "Ressenti",
+                                      "${current['feels_like']}°",
+                                      Icons.thermostat,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: cardWidth,
+                                    child: _buildDetailTile(
+                                      "Humidité",
+                                      "${current['humidity']}%",
+                                      Icons.water_drop,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Ligne 2
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: cardWidth,
+                                    child: _buildDetailTile(
+                                      "Vent",
+                                      "${current['wind_speed']} km/h",
+                                      Icons.air,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: cardWidth,
+                                    child: _buildDetailTile(
+                                      "Pression",
+                                      "${current['pressure']} hPa",
+                                      Icons.speed,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Ligne 3
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: cardWidth,
+                                    child: _buildDetailTile(
+                                      "Visibilité",
+                                      "${current['visibility']} km",
+                                      Icons.visibility,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: cardWidth,
+                                    child: _buildDetailTile(
+                                      "UV Index",
+                                      "3",
+                                      Icons.wb_sunny_outlined,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(child: _buildDetailTile("Vent", "${current['wind_speed']} km/h", Icons.air)),
-                              const SizedBox(width: 12),
-                              Expanded(child: _buildDetailTile("Pression", "${current['pressure']} hPa", Icons.speed)),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(child: _buildDetailTile("Visibilité", "${current['visibility']} km", Icons.visibility)),
-                              const SizedBox(width: 12),
-                              Expanded(child: _buildDetailTile("UV Index", "3", Icons.wb_sunny_outlined)),
-                            ],
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
 
@@ -376,36 +436,60 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          Column(
-                            children: [
-                              const Icon(Icons.wb_twilight, color: Colors.white, size: 32),
-                              const SizedBox(height: 8),
-                              Text(
-                                "Lever",
-                                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                current['sunrise'],
-                                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
-                              ),
-                            ],
+                          Expanded(
+                            child: Column(
+                              children: [
+                                const Icon(Icons.wb_twilight, color: Colors.white, size: 32),
+                                const SizedBox(height: 8),
+                                Text(
+                                  "Lever",
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.8),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  current['sunrise'],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
                           ),
-                          Container(height: 60, width: 1, color: Colors.white.withOpacity(0.3)),
-                          Column(
-                            children: [
-                              const Icon(Icons.nights_stay, color: Colors.white, size: 32),
-                              const SizedBox(height: 8),
-                              Text(
-                                "Coucher",
-                                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                current['sunset'],
-                                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
-                              ),
-                            ],
+                          Container(
+                            height: 60,
+                            width: 1,
+                            color: Colors.white.withOpacity(0.3),
+                          ),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                const Icon(Icons.nights_stay, color: Colors.white, size: 32),
+                                const SizedBox(height: 8),
+                                Text(
+                                  "Coucher",
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.8),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  current['sunset'],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -427,7 +511,10 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
                           children: [
                             const Text(
                               "Alertes agricoles",
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 12),
                             ...alerts.map((alert) => _buildAlertCard(alert)),
@@ -441,7 +528,9 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                          ),
                         ),
                         child: const Row(
                           children: [
@@ -450,7 +539,11 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
                             Expanded(
                               child: Text(
                                 "Aucune alerte - Conditions favorables",
-                                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],
@@ -469,27 +562,29 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
     );
   }
 
+  // OPTIMISATION ICI : Réduction des largeurs pour éviter l'overflow
   Widget _buildForecastRow(Map<String, dynamic> day) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
           SizedBox(
-            width: 100,
+            width: 75, // Réduit de 85 à 75
             child: Text(
               day['day_name'],
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
+              overflow: TextOverflow.ellipsis, // Sécurité ajoutée
             ),
           ),
           Text(
             getWeatherEmoji(day['icon']),
-            style: const TextStyle(fontSize: 32),
+            style: const TextStyle(fontSize: 28),
           ),
-          const SizedBox(width: 20),
+          const SizedBox(width: 8), // Réduit de 20 à 8
           SizedBox(
             width: 40,
             child: Text(
@@ -510,9 +605,9 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
               fontSize: 17,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8), // Réduit de 12 à 8
           Container(
-            width: 60,
+            width: 40, // Réduit de 60 à 40 (Gain majeur d'espace)
             height: 5,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(3),
@@ -521,7 +616,7 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 4), // Réduit de 6 à 4
           Text(
             "${day['temp_max'].toInt()}°",
             style: const TextStyle(
@@ -600,15 +695,15 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen>
           Text(alert['message'], style: const TextStyle(fontSize: 14)),
           const SizedBox(height: 12),
           ...alert['recommendations'].map<Widget>((rec) => Padding(
-                padding: const EdgeInsets.only(left: 8, bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("• ", style: TextStyle(fontWeight: FontWeight.bold)),
-                    Expanded(child: Text(rec, style: const TextStyle(fontSize: 13))),
-                  ],
-                ),
-              )),
+            padding: const EdgeInsets.only(left: 8, bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("• ", style: TextStyle(fontWeight: FontWeight.bold)),
+                Expanded(child: Text(rec, style: const TextStyle(fontSize: 13))),
+              ],
+            ),
+          )),
         ],
       ),
     );
