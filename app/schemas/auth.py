@@ -1,6 +1,4 @@
-# ============================================
 # app/schemas/auth.py
-# ============================================
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 import re
@@ -31,3 +29,8 @@ class LoginRequest(PhoneNumber):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+# 🆕 NOUVEAU SCHÉMA
+class GetOTPRequest(PhoneNumber):
+    """Requête pour récupérer le code OTP (dev/test uniquement)"""
+    pass
