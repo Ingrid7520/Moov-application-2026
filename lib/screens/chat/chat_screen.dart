@@ -482,7 +482,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Assistant IA AgriSmart",
+                      "AgriBot",
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 24,

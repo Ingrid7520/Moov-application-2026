@@ -1,22 +1,18 @@
 // lib/screens/auth/auth_screens.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../services/user_service.dart'; // ← AJOUT IMPORTANT
-import '../../main.dart'; // ← Pour MainScaffold
-import '../home/home_screen.dart';
-import '../diagnostic/diagnostic_screen.dart';
-import '../market/market_screen.dart';
-import '../chat/chat_screen.dart';
-import '../profile/profile_screen.dart';
+import '../../services/user_service.dart';
+import '../../main.dart';
 import '../terms/terms_screen.dart';
 
-// Configuration API - MODIFIER CETTE URL SELON VOTRE CONFIGURATION
-// Pour émulateur Android: 10.0.2.2
-// Pour téléphone physique: votre IP locale (ex: 192.168.1.16)
-const String baseUrl = 'http://192.168.1.161:8001/api';
+// ============================================================================
+// CONFIGURATION API
+// ============================================================================
+const String baseUrl = 'http://192.168.1.161:8001/api';  // ✅ Changez selon votre IP
 
 // =============================================================================
 // ÉCRAN DE CONNEXION (LOGIN)
@@ -30,7 +26,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _storage = const FlutterSecureStorage();
-  final _phoneController = TextEditingController(text: "+225");
+  final _phoneController = TextEditingController();
   bool _isLoading = false;
 
   @override
@@ -39,13 +35,35 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _sendLoginCode() async {
-    final phone = _phoneController.text.trim();
+  // ✅ FORMATER LE NUMÉRO CORRECTEMENT
+  String _formatPhoneNumber(String input) {
+    // Retirer tous les caractères non-numériques
+    String digitsOnly = input.replaceAll(RegExp(r'\D'), '');
 
-    if (phone.length < 8) {
+    // Si commence déjà par 225, garder tel quel
+    if (digitsOnly.startsWith('225')) {
+      return '+$digitsOnly';
+    }
+
+    // Si commence par 0, ajouter 225 AVANT le 0
+    if (digitsOnly.startsWith('0')) {
+      return '+225$digitsOnly';  // ✅ +2250172957171
+    }
+
+    // Sinon, ajouter 2250 devant
+    return '+2250$digitsOnly';
+  }
+
+  Future<void> _sendLoginCode() async {
+    final rawPhone = _phoneController.text.trim();
+
+    if (rawPhone.isEmpty || rawPhone.length < 8) {
       _showError("Veuillez entrer un numéro valide");
       return;
     }
+
+    // ✅ Formater le numéro
+    final phone = _formatPhoneNumber(rawPhone);
 
     setState(() => _isLoading = true);
 
@@ -53,7 +71,9 @@ class _LoginScreenState extends State<LoginScreen> {
       print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       print("ENVOI CODE DE CONNEXION");
       print("URL: $baseUrl/auth/login");
-      print("Phone: $phone");
+      print("Phone brut: $rawPhone");
+      print("Phone formaté: $phone");
+      print("Longueur: ${phone.length} caractères");
       print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
       final response = await http.post(
@@ -68,22 +88,21 @@ class _LoginScreenState extends State<LoginScreen> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        // Code envoyé avec succès
         if (data.containsKey('test_otp')) {
           print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-          print("CODE OTP (DEV): ${data['test_otp']}");
+          print("🔐 CODE OTP (DEV): ${data['test_otp']}");
           print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['message'] ?? 'Code envoyé avec succès !'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
         if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message'] ?? 'Code envoyé avec succès !'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -95,13 +114,27 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        final errorMessage = data['detail'] ?? data['message'] ?? 'Erreur lors de l\'envoi du code';
+        String errorMessage = 'Erreur lors de l\'envoi du code';
+
+        if (data is Map) {
+          if (data.containsKey('detail')) {
+            final detail = data['detail'];
+            if (detail is String) {
+              errorMessage = detail;
+            } else if (detail is List && detail.isNotEmpty) {
+              errorMessage = detail[0]['msg'] ?? 'Erreur de validation';
+            }
+          } else if (data.containsKey('message')) {
+            errorMessage = data['message'];
+          }
+        }
+
         print("❌ Erreur: $errorMessage");
         _showError(errorMessage);
       }
     } catch (e) {
       print("❌ Exception: $e");
-      _showError("Erreur de connexion au serveur: $e");
+      _showError("Erreur de connexion au serveur");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -193,25 +226,59 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // Champ Numéro de téléphone
+                  // ✅ Champ Numéro avec +225 en préfixe
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.phone_android, color: Colors.green[700]),
-                        hintText: "Numéro de téléphone",
-                        hintStyle: TextStyle(color: Colors.grey[500]),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 16,
+                    child: Row(
+                      children: [
+                        // Préfixe +225
+                        Padding(
+                          padding: const EdgeInsets.only(left: 16),
+                          child: Row(
+                            children: [
+                              Icon(Icons.phone_android, color: Colors.green[700]),
+                              const SizedBox(width: 8),
+                              const Text(
+                                '+225',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 8),
+                                height: 24,
+                                width: 1,
+                                color: Colors.grey[300],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                        // Champ de saisie
+                        Expanded(
+                          child: TextField(
+                            controller: _phoneController,
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(10), // Max 10 chiffres
+                            ],
+                            decoration: InputDecoration(
+                              hintText: "0172957171",
+                              hintStyle: TextStyle(color: Colors.grey[400]),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
@@ -250,7 +317,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 24),
 
                   // Lien vers l'inscription
-                  // ✅ Lien vers l'inscription - AVEC SAFEAR EA + PADDING
                   SafeArea(
                     child: Padding(
                       padding: EdgeInsets.only(
@@ -261,8 +327,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Flexible(
-                            child: Text("Pas encore de compte ?",
+                          const Flexible(
+                            child: Text(
+                              "Pas encore de compte ?",
                               style: TextStyle(fontSize: 11),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -300,7 +367,7 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 // =============================================================================
-// ÉCRAN DE VÉRIFICATION OTP
+// ÉCRAN DE VÉRIFICATION OTP - AVEC AUTO-REMPLISSAGE
 // =============================================================================
 class OtpVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -318,15 +385,22 @@ class OtpVerificationScreen extends StatefulWidget {
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   final _storage = const FlutterSecureStorage();
-  final List<TextEditingController> _controllers = List.generate(
-    6,
-        (_) => TextEditingController(),
-  );
+  final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   bool _isLoading = false;
+  bool _isAutoFilling = false;
+  Timer? _autoFillTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ DÉMARRER AUTO-REMPLISSAGE APRÈS 2 SECONDES
+    _autoFillTimer = Timer(const Duration(seconds: 2), _autoFillOTP);
+  }
 
   @override
   void dispose() {
+    _autoFillTimer?.cancel();
     for (var controller in _controllers) {
       controller.dispose();
     }
@@ -340,10 +414,62 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     return _controllers.map((c) => c.text).join();
   }
 
-  // Vérifier automatiquement quand les 6 chiffres sont entrés
+  // ============================================================================
+  // 🆕 AUTO-REMPLISSAGE OTP DEPUIS MONGODB
+  // ============================================================================
+  Future<void> _autoFillOTP() async {
+    if (!mounted) return;
+
+    setState(() => _isAutoFilling = true);
+
+    try {
+      print('🔍 Récupération OTP automatique...');
+      print('📞 Phone: ${widget.phoneNumber}');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/get-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'phone_number': widget.phoneNumber}),
+      );
+
+      print('📥 Status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final String code = data['code'];
+
+        print('✅ Code OTP récupéré: $code');
+
+        if (mounted && code.length == 6) {
+          // Remplir les champs un par un avec animation
+          for (int i = 0; i < 6; i++) {
+            await Future.delayed(const Duration(milliseconds: 150));
+            if (mounted) {
+              _controllers[i].text = code[i];
+            }
+          }
+
+          // Vérifier automatiquement après 500ms
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            _verifyOtp();
+          }
+        }
+      } else {
+        print('⚠️ Code OTP non trouvé - L\'utilisateur devra le saisir');
+      }
+    } catch (e) {
+      print('❌ Erreur auto-remplissage: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isAutoFilling = false);
+      }
+    }
+  }
+
+  // Vérifier automatiquement quand les 6 chiffres sont entrés manuellement
   void _checkAutoVerify() {
-    if (_otpCode.length == 6 && !_isLoading) {
-      // Petit délai pour une meilleure UX
+    if (_otpCode.length == 6 && !_isLoading && !_isAutoFilling) {
       Future.delayed(const Duration(milliseconds: 300), () {
         if (_otpCode.length == 6 && !_isLoading) {
           _verifyOtp();
@@ -353,7 +479,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 
   // ============================================================================
-  // 🔥 MODIFIÉ : Sauvegarde des données utilisateur avec UserService
+  // VÉRIFICATION OTP
   // ============================================================================
   Future<void> _verifyOtp() async {
     if (_otpCode.length != 6) {
@@ -364,19 +490,15 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Utiliser le même endpoint pour connexion et inscription
-      const endpoint = '/auth/verify-otp';
-
       print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       print("VÉRIFICATION OTP");
-      print("Endpoint: $baseUrl$endpoint");
       print("Phone: ${widget.phoneNumber}");
       print("Code: $_otpCode");
       print("Type: ${widget.isRegistration ? 'Inscription' : 'Connexion'}");
       print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
       final response = await http.post(
-        Uri.parse('$baseUrl$endpoint'),
+        Uri.parse('$baseUrl/auth/verify-otp'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "phone_number": widget.phoneNumber,
@@ -385,20 +507,16 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       );
 
       print("Status Code: ${response.statusCode}");
-      print("Response Body: ${response.body}");
 
       final data = jsonDecode(utf8.decode(response.bodyBytes));
 
       if (response.statusCode == 200) {
-        // Vérifier si le token existe
         final token = data['access_token'] ?? data['token'];
 
         if (token != null) {
-          // ===== MODIFICATION IMPORTANTE : Utiliser UserService =====
-          // 1. Sauvegarder le token JWT
+          // Sauvegarder token + données utilisateur
           await UserService.saveToken(token);
 
-          // 2. Sauvegarder les données utilisateur (CRITIQUE pour la navigation conditionnelle)
           if (data['user'] != null) {
             await UserService.saveUserData(data['user']);
 
@@ -408,20 +526,17 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             print("User Type: ${data['user']['user_type']}");
             print("Name: ${data['user']['name']}");
             print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-          } else {
-            print("⚠️ ATTENTION : 'user' absent dans la réponse API");
           }
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Connexion réussie !'),
+                content: Text('✅ Connexion réussie !'),
                 backgroundColor: Colors.green,
                 behavior: SnackBarBehavior.floating,
               ),
             );
 
-            // Redirection vers l'écran principal (navigation conditionnelle gérée dans MainScaffold)
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (context) => const MainScaffold()),
@@ -429,11 +544,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             );
           }
         } else {
-          print("❌ Aucun token trouvé dans la réponse");
-          _showError("Erreur: Token manquant dans la réponse");
+          print("❌ Aucun token trouvé");
+          _showError("Erreur: Token manquant");
         }
       } else {
-        // Meilleure gestion des erreurs
         String errorMessage = 'Code incorrect';
 
         if (data is Map) {
@@ -454,7 +568,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       }
     } catch (e) {
       print("❌ Exception: $e");
-      _showError("Erreur de connexion: $e");
+      _showError("Erreur de connexion");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -473,13 +587,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data.containsKey('test_otp')) {
-          print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-          print("NOUVEAU CODE OTP: ${data['test_otp']}");
-          print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        }
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -488,6 +595,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               behavior: SnackBarBehavior.floating,
             ),
           );
+
+          // Relancer l'auto-remplissage
+          _autoFillTimer?.cancel();
+          _autoFillTimer = Timer(const Duration(seconds: 2), _autoFillOTP);
         }
       }
     } catch (e) {
@@ -559,7 +670,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
             const SizedBox(height: 48),
 
-            // Champs OTP (6 digits)
+            // ✅ CHAMPS OTP AVEC ANIMATION AUTO-REMPLISSAGE
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: List.generate(6, (index) {
@@ -571,33 +682,30 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     textAlign: TextAlign.center,
                     keyboardType: TextInputType.number,
                     maxLength: 1,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
                       counterText: "",
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor: _isAutoFilling ? Colors.green[50] : Colors.grey[100],
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.green[700]!, width: 4),
+                        borderSide: BorderSide(color: Colors.green[700]!, width: 2),
                       ),
                     ),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     onChanged: (value) {
                       if (value.isNotEmpty) {
-                        // Passer au champ suivant
                         if (index < 5) {
                           _focusNodes[index + 1].requestFocus();
                         } else {
-                          // Dernier champ, lancer la vérification auto
                           _focusNodes[index].unfocus();
                           _checkAutoVerify();
                         }
                       } else {
-                        // Revenir au champ précédent si suppression
                         if (index > 0) {
                           _focusNodes[index - 1].requestFocus();
                         }
@@ -610,9 +718,32 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
             const SizedBox(height: 32),
 
+            // ✅ INDICATEUR AUTO-REMPLISSAGE
+            if (_isAutoFilling)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Récupération automatique...',
+                    style: TextStyle(color: Colors.green[700], fontSize: 13),
+                  ),
+                ],
+              ),
+
+            const SizedBox(height: 24),
+
             // Bouton Vérifier
             ElevatedButton(
-              onPressed: _isLoading ? null : _verifyOtp,
+              onPressed: (_isLoading || _isAutoFilling) ? null : _verifyOtp,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green[700],
                 foregroundColor: Colors.white,
@@ -649,10 +780,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 const Text("Vous n'avez pas reçu le code ?"),
                 TextButton(
                   onPressed: _resendCode,
-                   child: Text(
+                  child: Text(
                     "Renvoyer",
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 14,
                       color: Colors.green[700],
                       fontWeight: FontWeight.bold,
                     ),
@@ -679,7 +810,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
-  final _phoneController = TextEditingController(text: "+225");
+  final _phoneController = TextEditingController();
   final _locationController = TextEditingController();
   String _userType = 'producer';
   bool _isLoading = false;
@@ -692,15 +823,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  // ✅ FORMATER LE NUMÉRO CORRECTEMENT
+  String _formatPhoneNumber(String input) {
+    String digitsOnly = input.replaceAll(RegExp(r'\D'), '');
+
+    if (digitsOnly.startsWith('225')) {
+      return '+$digitsOnly';
+    }
+
+    if (digitsOnly.startsWith('0')) {
+      return '+225$digitsOnly';  // ✅ +2250172957171
+    }
+
+    return '+2250$digitsOnly';
+  }
+
   Future<void> _register() async {
     final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
+    final rawPhone = _phoneController.text.trim();
     final location = _locationController.text.trim();
 
-    if (name.isEmpty || phone.length < 8) {
+    if (name.isEmpty || rawPhone.isEmpty || rawPhone.length < 8) {
       _showError("Veuillez remplir tous les champs");
       return;
     }
+
+    // ✅ Formater le numéro
+    final phone = _formatPhoneNumber(rawPhone);
 
     setState(() => _isLoading = true);
 
@@ -708,7 +857,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       print("INSCRIPTION");
       print("Name: $name");
-      print("Phone: $phone");
+      print("Phone brut: $rawPhone");
+      print("Phone formaté: $phone");
+      print("Longueur: ${phone.length} caractères");
       print("Location: $location");
       print("User Type: $_userType");
       print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -732,19 +883,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (response.statusCode == 201 || response.statusCode == 200) {
         if (data.containsKey('test_otp')) {
           print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-          print("CODE OTP (DEV): ${data['test_otp']}");
+          print("🔐 CODE OTP (DEV): ${data['test_otp']}");
           print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['message'] ?? 'Inscription réussie !'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
         if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message'] ?? 'Inscription réussie !'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -756,13 +907,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
           );
         }
       } else {
-        final errorMessage = data['detail'] ?? data['message'] ?? 'Erreur lors de l\'inscription';
+        String errorMessage = 'Erreur lors de l\'inscription';
+
+        if (data is Map) {
+          if (data.containsKey('detail')) {
+            final detail = data['detail'];
+            if (detail is String) {
+              errorMessage = detail;
+            } else if (detail is List && detail.isNotEmpty) {
+              errorMessage = detail[0]['msg'] ?? 'Erreur de validation';
+            }
+          } else if (data.containsKey('message')) {
+            errorMessage = data['message'];
+          }
+        }
+
         print("❌ Erreur: $errorMessage");
         _showError(errorMessage);
       }
     } catch (e) {
       print("❌ Exception: $e");
-      _showError("Erreur de connexion: $e");
+      _showError("Erreur de connexion");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -855,25 +1020,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 16),
 
-            // Champ Téléphone
+            // ✅ Champ Téléphone avec +225
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.phone_android, color: Colors.green[700]),
-                  hintText: "Numéro de téléphone",
-                  hintStyle: TextStyle(color: Colors.grey[500]),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.phone_android, color: Colors.green[700]),
+                        const SizedBox(width: 8),
+                        const Text(
+                          '+225',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          height: 24,
+                          width: 1,
+                          color: Colors.grey[300],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  Expanded(
+                    child: TextField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      decoration: InputDecoration(
+                        hintText: "0172957171",
+                        hintStyle: TextStyle(color: Colors.grey[400]),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -941,32 +1138,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 24),
 
-            // Acceptation des conditions
-            Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green[700], size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      text: "J'accepte les ",
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      children: [
-                        TextSpan(
-                          text: "Conditions d'utilisation",
-                          style: TextStyle(
-                            color: Colors.green[700],
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 32),
             // Conditions d'utilisation
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -975,7 +1146,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   Text(
                     'En vous inscrivant, vous acceptez nos ',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   InkWell(
                     onTap: () {
@@ -989,7 +1160,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Text(
                       'Conditions d\'utilisation',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         color: Colors.green[700],
                         fontWeight: FontWeight.bold,
                         decoration: TextDecoration.underline,
@@ -999,6 +1170,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
               ),
             ),
+
             // Bouton S'inscrire
             ElevatedButton(
               onPressed: _isLoading ? null : _register,

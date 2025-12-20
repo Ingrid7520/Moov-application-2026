@@ -320,24 +320,112 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Row(
-                                  children: [
-                                    Icon(Icons.info_outline, color: Colors.white),
-                                    SizedBox(width: 12),
-                                    Expanded(
+                            showDialog(
+                              context: context,
+                              builder: (BuildContext context) {
+                                return AlertDialog(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  title: Row(
+                                    children: [
+                                      Icon(Icons.support_agent, color: Colors.green[700], size: 28),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'Contacter un Expert',
+                                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Vos images et l\'analyse préalable effectuée par notre modèle d\'intelligence artificielle seront transmises à un expert agricole pour une analyse approfondie et des recommandations personnalisées.',
+                                        style: TextStyle(fontSize: 15, height: 1.5),
+                                      ),
+                                      SizedBox(height: 16),
+                                      Container(
+                                        padding: EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue[50],
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: Colors.blue[200]!),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                                            SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Délai de réponse : 24 à 48h',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.blue[900],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                      },
                                       child: Text(
-                                        'Cette fonctionnalité sera disponible prochainement. '
-                                            'Un expert agricole vous contactera.',
+                                        'Annuler',
+                                        style: TextStyle(color: Colors.grey[600]),
+                                      ),
+                                    ),
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Row(
+                                              children: [
+                                                Icon(Icons.check_circle, color: Colors.white),
+                                                SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Données et diagnostic préalable envoyés à nos experts. '
+                                                        'Vous recevrez un retour sous 48h maximum.',
+                                                    style: TextStyle(fontSize: 14),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            backgroundColor: Colors.green[700],
+                                            behavior: SnackBarBehavior.floating,
+                                            duration: Duration(seconds: 5),
+                                            margin: EdgeInsets.all(16),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      icon: Icon(Icons.send, size: 18),
+                                      label: Text('Envoyer'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green[700],
+                                        foregroundColor: Colors.white,
+                                        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
                                       ),
                                     ),
                                   ],
-                                ),
-                                backgroundColor: Colors.green[700],
-                                behavior: SnackBarBehavior.floating,
-                                duration: Duration(seconds: 4),
-                              ),
+                                );
+                              },
                             );
                           },
                           icon: Icon(Icons.support_agent),
